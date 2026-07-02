@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any
 from network_zone import NetworkZone
 from hub import Hub
 from connection import Connection
@@ -21,7 +22,7 @@ class Parser():
 
     def paser(self) -> None:
         with open(self.file) as file:
-            lines: list[str] = file.readlines()
+            lines: list[str] = [ line for line in file.readlines() if not line.startswith('#')]
             if not self.first_drones_line(lines[0]):
                 raise ValueError('The first line should be the number of drones.')
             if not self.extreme_zones(lines):
@@ -44,21 +45,34 @@ class Parser():
                             raise ValueError('The value of number drones must be an int.')
                     case TypeData.START_HUB:
                         if network_zone.start == None:
-                            network_zone.start == Hub.parser(value.strip().split(' '))
+                            data: list[Any] = value.strip().split(' ')
+                            data.append(self.metadata_valid(data.pop()))
+                            network_zone.start == Hub.parser(data)
                         else:
                             raise ValueError('Value of start hub already set.')
                     case TypeData.END_HUB:
                         if network_zone.end == None:
-                            network_zone.end == Hub.parser(value.strip().split(' '))
+                            data: list[Any] = value.strip().split(' ')
+                            data.append(self.metadata_valid(data.pop()))
+                            network_zone.end == Hub.parser(data)
                         else:
                             raise ValueError('Value of end hub already set.')
                     case TypeData.HUB:
-                        network_zone.hubs.append(Hub.parser(value.strip().split(' ')))
+                        data: list[Any] = value.strip().split(' ')
+                        data.append(self.metadata_valid(data.pop()))
+                        network_zone.hubs.append(Hub.parser(data))
                     case TypeData.CONNECTION:
-                        network_zone.connections.append(Connection(value.strip().split(' ')))
+                        data: list[Any] = value.strip().split(' ')
+                        data.append(self.metadata_valid(data.pop()))
+                        network_zone.connections.append(Connection(data))
             
+            hubs: list[Hub] = self.hub_data(network_zone)
+            hub_names: list[str] = [hub.name for hub in hubs]
+            hub_coords: list[tuple[int, int]] = [(hub.coord_x, hub.coord_y)for hub in hubs]
             if len(hub_names) != len(set(hub_names)):
                 raise ValueError('All zones must have unique names.')
+            if len(hub_coords) != len(set(hub_coords)):
+                raise ValueError('All zones must have unique coords.')
 
     def first_drones_line(line: str) -> bool:
         if TypeData.NUMBER_DRONES.value in line:
@@ -75,33 +89,26 @@ class Parser():
         else:
             return False
 
-    def hub_data(network_zone: NetworkZone):
+    def hub_data(network_zone: NetworkZone) -> list[Hub]:
         hubs: list[Hub] = network_zone.hubs
         hubs.append(network_zone.start)
         hubs.append(network_zone.end)
-
-
-    def hub_names(lines: list[str]):
-        hub_names: list[str] = []
-        for line in lines:
-            key, value = line.split(':', 1)
-            if (
-                key == TypeData.HUB
-                or key == TypeData.START_HUB
-                or key == TypeData.END_HUB
-            ):
-                hub_names.append(value.strip().split(' ')[0])
-
-    def hub_coords(lines: list[str]):
-        hub_coords: list[tuple[int, int]] = []
-        for line in lines:
-            key, value = line.split(':', 1)
-            if (
-                key == TypeData.HUB
-                or key == TypeData.START_HUB
-                or key == TypeData.END_HUB
-            ):
-                
+        return hubs
+    
+    def metadata_valid(metadata: str) -> list[dict[str, Any]]:
+        metadata_valid: dict[str, Any] = {}
+        for data in metadata[1:-1].split(' '):
+            split_data = data.split('=')
+            if len(split_data) < 2 or split_data[1] == '':
+                raise ValueError(
+                    'The metadata is invalid.'
+                    'It requires a key or value separated by an equals sign to be valid.'
+                    'For more than one argument, separate them with spaces.'
+                )
+            else:
+                key, val = split_data
+                metadata_valid[key] = val
+        return metadata_valid
 
 class ParserConnection():
     def __init__(self, connection: str, metadata: str) -> None:
