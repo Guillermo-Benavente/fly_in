@@ -1,11 +1,11 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from network_zone import NetworkZone
 from hub import Hub
 from connection import Connection
 
 
-class TypeData(Enum):
+class TypeData(StrEnum):
     NUMBER_DRONES = 'nb_drones'
     START_HUB = 'start_hub'
     END_HUB = 'end_hub'
@@ -47,25 +47,28 @@ class Parser():
                         if network_zone.start == None:
                             data: list[Any] = value.strip().split(' ')
                             data.append(self.metadata_valid(data.pop()))
-                            network_zone.start == Hub.parser(data)
+                            Hub.parser(data)
+                            network_zone.start == Hub(data)
                         else:
                             raise ValueError('Value of start hub already set.')
                     case TypeData.END_HUB:
                         if network_zone.end == None:
                             data: list[Any] = value.strip().split(' ')
                             data.append(self.metadata_valid(data.pop()))
-                            network_zone.end == Hub.parser(data)
+                            Hub.parser(data)
+                            network_zone.end == Hub(data)
                         else:
                             raise ValueError('Value of end hub already set.')
                     case TypeData.HUB:
                         data: list[Any] = value.strip().split(' ')
                         data.append(self.metadata_valid(data.pop()))
-                        network_zone.hubs.append(Hub.parser(data))
+                        Hub.parser(data)
+                        network_zone.hubs.append(Hub(data))
                     case TypeData.CONNECTION:
                         data: list[Any] = value.strip().split(' ')
                         data.append(self.metadata_valid(data.pop()))
+                        Connection.parser(data)
                         network_zone.connections.append(Connection(data))
-            
             hubs: list[Hub] = self.hub_data(network_zone)
             hub_names: list[str] = [hub.name for hub in hubs]
             hub_coords: list[tuple[int, int]] = [(hub.coord_x, hub.coord_y)for hub in hubs]
@@ -95,7 +98,7 @@ class Parser():
         hubs.append(network_zone.end)
         return hubs
     
-    def metadata_valid(metadata: str) -> list[dict[str, Any]]:
+    def metadata_valid(metadata: str) -> dict[str, Any]:
         metadata_valid: dict[str, Any] = {}
         for data in metadata[1:-1].split(' '):
             split_data = data.split('=')
