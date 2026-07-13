@@ -3,13 +3,15 @@ from hub import Hub
 
 
 class Connection():
+    name: str
     init_hub: Hub
     final_hub: Hub
     metadata: dict[str, Any]
 
-    def __init__(self, connection: str, metadata: dict[str, Any], hubs: list[Hub]):
+    def __init__(self, connection: str, metadata: dict[str, Any], hubs: list[Hub]) -> None:
         self.parser(connection, metadata, hubs)
         init_hub, final_hub = connection.split('-')
+        self.name = connection
         self.metadata = metadata
         for hub in hubs:
             if hub.name == init_hub:

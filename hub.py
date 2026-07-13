@@ -2,6 +2,12 @@ from typing import Any
 from enum import StrEnum
 
 
+class TypeMetadata(StrEnum):
+    ZONE = 'zone'
+    COLOR = 'color'
+    MAX_DRONES = 'max_drones'
+
+
 class TypeZone(StrEnum):
     NORMAL = 'normal'
     BLOCKED = 'blocked'
@@ -26,7 +32,7 @@ class Hub():
     coord_y: int
     metadata: dict[str, Any]
     
-    def __init__(self, name: str, coord_x: str, coord_y: str, metadata: dict[str, Any]):
+    def __init__(self, name: str, coord_x: str, coord_y: str, metadata: dict[str, Any]) -> None:
         self.parser(name, coord_x, coord_y, metadata)
         self.name = name
         self.coord_x = int(coord_x)
@@ -52,13 +58,13 @@ class Hub():
             raise ValueError('The y coordinate must be an integer')
         for data in metadata:
             match data:
-                case 'zone':
+                case TypeMetadata.ZONE:
                     if metadata[data] not in TypeZone:
                         raise ValueError('Invalid zone')
-                case 'color':
+                case TypeMetadata.COLOR:
                     if metadata[data] not in TypeColor:
                         raise ValueError('Invalid color')
-                case 'max_drones':
+                case TypeMetadata.MAX_DRONES:
                     try:
                         max_drones: int = int(metadata[data])
                         if not isinstance(max_drones, int) or max_drones < 1:
@@ -69,3 +75,14 @@ class Hub():
                         raise ValueError('max_drones must be an positive integer')
                 case _:
                     raise ValueError(f'That metadata {data} is not valid for the Hub')
+
+    def get_turn_zone(self) -> int:
+        match self.metadata.get(TypeMetadata.ZONE):
+            case TypeZone.NORMAL:
+                return 1
+            case TypeZone.BLOCKED:
+                return -1
+            case TypeZone.RESTRICTED:
+                return 2
+            case TypeZone.PRIORITY:
+                return 1
