@@ -1,5 +1,5 @@
 from typing import Any
-from enum import StrEnum
+from strenum import StrEnum
 
 
 class TypeMetadata(StrEnum):
@@ -59,11 +59,15 @@ class Hub():
         for data in metadata:
             match data:
                 case TypeMetadata.ZONE:
-                    if metadata[data] not in TypeZone:
+                    try:
+                        TypeZone(metadata[data])
+                    except ValueError:
                         raise ValueError('Invalid zone')
                 case TypeMetadata.COLOR:
-                    if metadata[data] not in TypeColor:
-                        raise ValueError('Invalid color')
+                    try:
+                        TypeColor(metadata[data])
+                    except ValueError:
+                        raise ValueError('Invalid zone')
                 case TypeMetadata.MAX_DRONES:
                     try:
                         max_drones: int = int(metadata[data])

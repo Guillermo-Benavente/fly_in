@@ -1,4 +1,4 @@
-from enum import StrEnum
+from strenum import StrEnum
 from typing import Any
 from network_zone import NetworkZone
 from hub import Hub
@@ -18,7 +18,6 @@ class Parser():
 
     def __init__(self, file: str) -> None:
         self.file = file
-        self.paser()
 
     def paser(self) -> NetworkZone:
         with open(self.file) as file:
@@ -29,6 +28,8 @@ class Parser():
                 raise ValueError('There must be an entrance and an exit.')
             network_zone: NetworkZone = NetworkZone()
             for line in lines:
+                if line.strip() == '':
+                    continue
                 key, value = line.strip().split(':', 1)
                 match key:
                     case TypeData.NUMBER_DRONES:
@@ -81,15 +82,15 @@ class Parser():
             return network_zone
 
     def first_drones_line(self, line: str) -> bool:
-        if TypeData.NUMBER_DRONES.value in line:
+        if TypeData.NUMBER_DRONES in line:
             return True
         else:
             return False
 
     def extreme_zones(self, lines: list[str]) -> bool:
         if (
-            any(TypeData.START_HUB.value in line for line in lines) 
-            and any(TypeData.END_HUB.value in line for line in lines)
+            any(TypeData.START_HUB in line for line in lines) 
+            and any(TypeData.END_HUB in line for line in lines)
         ):
             return True
         else:

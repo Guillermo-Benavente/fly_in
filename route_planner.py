@@ -34,6 +34,6 @@ class RoutePlanner():
             for connection in self.network_zone.find_connection(current_node):
                 if connection.final_hub == current_node:
                     init_weight: int = connection.init_hub.get_turn_zone()
-                    new_weight: int = map[connection.final_hub.name] + init_weight
+                    new_weight: int = map[current_node.name] + init_weight
                     map[connection.init_hub.name] = new_weight
         return map

@@ -7,12 +7,13 @@ install:
 	@echo "Install dependencies..."
 	@$(PIP) install --upgrade pip > /dev/null 2>&1
 	@$(PIP) install pydantic flake8 mypy > /dev/null 2>&1
+	@$(PIP) install -r requirements.txt
 	@echo "Done."
 run:
-	@$(PYTHON) x.py
+	@$(PYTHON) fly_in.py
 
 debug:
-	@$(PYTHON) -m pdb x.py
+	@$(PYTHON) -m pdb fly_in.py
 
 clean:
 	@rm -rf __pycache__ .mypy_cache 

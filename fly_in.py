@@ -4,8 +4,7 @@ from network_zone import NetworkZone
 
 
 def main():
-    map: NetworkZone = Parser('a')
-
+    map: NetworkZone = Parser('./maps/easy/01_linear_path.txt').paser()
 
 if __name__ == "__main__":
     main()
