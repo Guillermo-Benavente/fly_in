@@ -21,7 +21,7 @@ class Parser():
 
     def paser(self) -> NetworkZone:
         with open(self.file) as file:
-            lines: list[str] = [line for line in file.readlines() if not line.startswith('#')]
+            lines: list[str] = [line for line in file.readlines() if not line.startswith('#') and line.strip()]
             if not self.first_drones_line(lines[0]):
                 raise ValueError('The first line should be the number of drones.')
             if not self.extreme_zones(lines):

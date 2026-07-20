@@ -24,6 +24,16 @@ class TypeColor(StrEnum):
     YELLOW = 'yellow'
     MAGENTA = 'magenta'
     CYAN = 'cyan'
+    ORANGE = 'orange'
+    PURPLE = 'purple'
+    BROWN = 'brown'
+    MAROON = 'maroon'
+    GOLD = 'gold'
+    LIME = 'lime'
+    CRIMSON = 'crimson'
+    VIOLET = 'violet'
+    DARKRED = 'darkred'
+    RAINBOW = 'rainbow'
 
 
 class Hub():
@@ -89,4 +99,6 @@ class Hub():
             case TypeZone.RESTRICTED:
                 return 2
             case TypeZone.PRIORITY:
+                return 1
+            case _:
                 return 1
