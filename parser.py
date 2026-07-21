@@ -103,17 +103,19 @@ class Parser():
         return hubs
 
     def extract_data(self, crude_data: str) -> list[Any]:
-        data: list[str] = crude_data.strip().split(' ')
-        possible_metadata: str = data.pop()
-        if possible_metadata.startswith('[') and possible_metadata.endswith(']'):
-           return [*data, self.metadata_valid(possible_metadata)]
-        else: 
-            return [*data, possible_metadata, {}]
-        
+        all_data: list[str] = crude_data.strip().split('[')
+        if len(all_data) > 2:
+            raise ValueError('There can only be one metadata box')
+        data: list[str] = all_data[0].strip().split(' ')
+        if len(all_data) == 2:
+            return [*data, self.metadata_valid(all_data[1][:-1])]
+        else:
+            return [*data, {}]
+
 
     def metadata_valid(self, metadata: str) -> dict[str, Any]:
         metadata_valid: dict[str, Any] = {}
-        for data in metadata[1:-1].split(' '):
+        for data in metadata.split(' '):
             split_data = data.split('=')
             if len(split_data) < 2 or split_data[1] == '':
                 raise ValueError(
