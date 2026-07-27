@@ -34,14 +34,18 @@ class RoutePlanner():
             for drone
             in self.drone_list
         ):
+            arrived_ids: set[int] = set()
             for drone in self.drone_list:
-                self._arrive(drone, iteration)
+                if drone.in_transit:
+                    self._arrive(drone, iteration)
+                    arrived_ids.add(drone.id)
             active: list[Drone] = [
                 drone
                 for drone
                 in self.drone_list
                 if drone.current_zone != self.network_zone.end
                 and not drone.in_transit
+                and drone.id not in arrived_ids
             ]
             if iteration >= max_iterations:
                 stuck: list[str] = [
@@ -120,6 +124,7 @@ class RoutePlanner():
         traffic_penalty: int = 0 if is_special else sum(
             1 for d in self.drone_list
             if d.current_zone == neighbor.hub
+            and not d.in_transit
         )
         backtrack_penalty: int = 10 if prev_node_name == neighbor.hub.name else 0
         visit_penalty: int = 5 * max(0, visits.get(neighbor.hub.name, 0) - 1)
@@ -142,7 +147,6 @@ class RoutePlanner():
     def _move(self, drone: Drone, turn: int) -> None:
         current_node: MapNode = self.mapper.nodes[drone.current_zone.name]
 
-        self.visit_counter[drone.id][drone.current_zone.name] += 1
         visits: dict[str, int] = self.visit_counter[drone.id]
         prev_node_name: str | None = list(drone.route.values())[-1] if drone.route else None
 
@@ -153,11 +157,21 @@ class RoutePlanner():
             score: float = self._score_neighbor(drone, neighbor, visits, prev_node_name)
             candidates.append((score, neighbor))
 
-        if not candidates:
-            return
+        stay_score: float = current_node.remaining_cost + 0.1
+        has_progress: bool = any(
+            n.remaining_cost < current_node.remaining_cost
+            for _, n in candidates
+        )
+        if not has_progress:
+            candidates.append((stay_score, current_node))
 
         best_neighbor: MapNode = self._pick_best(candidates)
         is_restricted: bool = best_neighbor.hub.metadata.get('zone') == 'restricted'
+
+        if best_neighbor == current_node:
+            drone.route[turn] = current_node.hub.name
+            drone.zone_route[turn] = current_node.hub.name
+            return
 
         if is_restricted:
             drone.in_transit = True
@@ -171,6 +185,7 @@ class RoutePlanner():
             drone.current_zone = best_neighbor.hub
             drone.route[turn] = best_neighbor.hub.name
             drone.zone_route[turn] = best_neighbor.hub.name
+        self.visit_counter[drone.id][best_neighbor.hub.name] += 1
 
     def output(self) -> str:
         lines: list[str] = []
