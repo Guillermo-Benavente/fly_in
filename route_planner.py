@@ -14,20 +14,46 @@ class RoutePlanner():
         self.network_zone = network_zone
         self.mapper = Mapper(network_zone)
         self.drone_list = self._create_drones()
-        self.visit_counter = {d.id: {node.hub.name: 0 for node in self.mapper.nodes.values()} for d in self.drone_list}
+        self.visit_counter = {
+            drone.id: {
+                node.hub.name: 0
+                for node
+                in self.mapper.nodes.values()
+            }
+            for drone
+            in self.drone_list
+        }
         self._route()
 
     def _route(self) -> None:
-        max_iterations = 20000
-        iteration = 0
-        while any(d.current_zone != self.network_zone.end for d in self.drone_list):
+        start_cost: int = self.mapper.nodes[self.network_zone.start.name].remaining_cost
+        max_iterations: int = start_cost * self.network_zone.drones * 2
+        iteration: int = 0
+        while any(
+            drone.current_zone != self.network_zone.end
+            for drone
+            in self.drone_list
+        ):
+            for drone in self.drone_list:
+                self._arrive(drone, iteration)
+            active: list[Drone] = [
+                drone
+                for drone
+                in self.drone_list
+                if drone.current_zone != self.network_zone.end
+                and not drone.in_transit
+            ]
             if iteration >= max_iterations:
-                stuck = [f'{d.id}:{d.current_zone.name}' for d in self.drone_list if d.current_zone != self.network_zone.end]
+                stuck: list[str] = [
+                    f'{drone.id}:{drone.current_zone.name}'
+                    for drone
+                    in self.drone_list
+                    if drone.current_zone != self.network_zone.end
+                ]
                 raise RuntimeError(f'Infinite loop detected. Stuck drones: {stuck}')
-            active = [d for d in self.drone_list if d.current_zone != self.network_zone.end]
-            active.sort(key=lambda d: self.mapper.nodes[d.current_zone.name].remaining_cost)
+            active.sort(key=lambda drone: self.mapper.nodes[drone.current_zone.name].remaining_cost)
             for drone in active:
-                self._move(drone)
+                self._move(drone, iteration)
             iteration += 1
 
     def _create_drones(self) -> list[Drone]:
@@ -41,63 +67,121 @@ class RoutePlanner():
     def _edge_key(a: str, b: str) -> str:
         return f'{min(a, b)}-{max(a, b)}'
 
-    def _move(self, drone: Drone) -> None:
-        current_node = self.mapper.nodes[drone.current_zone.name]
+    def _arrive(self, drone: Drone, turn: int) -> None:
+        if drone.in_transit and turn >= drone.transit_arrives_at:
+            drone.current_zone = drone.transit_to
+            drone.route[turn] = drone.transit_to.name
+            drone.zone_route[turn] = drone.transit_to.name
+            drone.in_transit = False
+            drone.transit_to = None
+            drone.transit_arrives_at = -1
+            drone.transit_from = None
+            drone.transit_connection = None
+
+    def _is_valid_neighbor(self, drone: Drone, current_node: MapNode, neighbor: MapNode) -> bool:
+        if neighbor.remaining_cost == -1:
+            return False
+        is_special: bool = neighbor.hub == self.network_zone.end or neighbor.hub == self.network_zone.start
+        if not is_special:
+            hub_occupancy: int = sum(
+                1 for d in self.drone_list
+                if d.current_zone == neighbor.hub
+                or (d.in_transit and d.transit_to == neighbor.hub)
+            )
+            if hub_occupancy >= neighbor.max_drones:
+                return False
+        max_cap: int = self.mapper.link_capacity.get(
+            self._edge_key(current_node.hub.name, neighbor.hub.name), 1
+        )
+        link_key: str = self._edge_key(current_node.hub.name, neighbor.hub.name)
+        link_occupancy: int = sum(
+            1 for d in self.drone_list
+            if d.id != drone.id
+            and (
+                (d.current_zone == current_node.hub
+                 and d.route
+                 and list(d.route.values())[-1] == neighbor.hub.name)
+                or (d.in_transit and d.transit_connection == link_key)
+            )
+        )
+        if link_occupancy >= max_cap:
+            return False
+        return True
+
+    def _score_neighbor(
+        self, drone: Drone, neighbor: MapNode,
+        visits: dict[str, int], prev_node_name: str | None
+    ) -> float:
+        static_cost: int = neighbor.remaining_cost + neighbor.hub.get_turn_zone()
+        is_special: bool = (
+            neighbor.hub == self.network_zone.end
+            or neighbor.hub == self.network_zone.start
+        )
+        traffic_penalty: int = 0 if is_special else sum(
+            1 for d in self.drone_list
+            if d.current_zone == neighbor.hub
+        )
+        backtrack_penalty: int = 10 if prev_node_name == neighbor.hub.name else 0
+        visit_penalty: int = 5 * max(0, visits.get(neighbor.hub.name, 0) - 1)
+        return static_cost + traffic_penalty + backtrack_penalty + visit_penalty
+
+    def _pick_best(self, candidates: list[tuple[float, MapNode]]) -> MapNode:
+        min_score: float = min(c[0] for c in candidates)
+        best: list[tuple[float, MapNode]] = [c for c in candidates if c[0] == min_score]
+        if len(best) > 1:
+            priority: list[tuple[float, MapNode]] = [
+                c for c in best
+                if c[1].hub.metadata.get('zone') == 'priority'
+            ]
+            if priority:
+                best = priority
+            if len(best) > 1:
+                random.shuffle(best)
+        return best[0][1]
+
+    def _move(self, drone: Drone, turn: int) -> None:
+        current_node: MapNode = self.mapper.nodes[drone.current_zone.name]
 
         self.visit_counter[drone.id][drone.current_zone.name] += 1
-        visits = self.visit_counter[drone.id]
-
-        prev_node_name = list(drone.route.values())[-1] if drone.route else None
+        visits: dict[str, int] = self.visit_counter[drone.id]
+        prev_node_name: str | None = list(drone.route.values())[-1] if drone.route else None
 
         candidates: list[tuple[float, MapNode]] = []
         for neighbor in current_node.neighbors.values():
-            if neighbor.remaining_cost == -1:
+            if not self._is_valid_neighbor(drone, current_node, neighbor):
                 continue
-            is_special = neighbor.hub == self.network_zone.end or neighbor.hub == self.network_zone.start
-            if not is_special:
-                hub_occupancy = sum(1 for d in self.drone_list if d.current_zone == neighbor.hub)
-                if hub_occupancy >= neighbor.max_drones:
-                    continue
-            max_cap = self.mapper.link_capacity.get(
-                self._edge_key(current_node.hub.name, neighbor.hub.name), 1
-            )
-            link_occupancy = sum(
-                1 for d in self.drone_list
-                if d.id != drone.id
-                and d.current_zone == current_node.hub
-                and d.route
-                and list(d.route.values())[-1] == neighbor.hub.name
-            )
-            if link_occupancy >= max_cap:
-                continue
-            static_cost = neighbor.remaining_cost + neighbor.hub.get_turn_zone()
-            traffic_penalty = sum(1 for d in self.drone_list if d.current_zone == neighbor.hub)
-
-            backtrack_penalty = 10 if prev_node_name == neighbor.hub.name else 0
-            visit_penalty = 5 * max(0, visits.get(neighbor.hub.name, 0) - 1)
-
-            total_score = static_cost + traffic_penalty + backtrack_penalty + visit_penalty
-            candidates.append((total_score, neighbor))
+            score: float = self._score_neighbor(drone, neighbor, visits, prev_node_name)
+            candidates.append((score, neighbor))
 
         if not candidates:
             return
 
-        min_score = min(c[0] for c in candidates)
-        best = [c for c in candidates if c[0] == min_score]
-        if len(best) > 1:
-            random.shuffle(best)
-        best_neighbor = best[0][1]
-        drone.current_zone = best_neighbor.hub
-        drone.route[len(drone.route)] = best_neighbor.hub.name
+        best_neighbor: MapNode = self._pick_best(candidates)
+        is_restricted: bool = best_neighbor.hub.metadata.get('zone') == 'restricted'
+
+        if is_restricted:
+            drone.in_transit = True
+            drone.transit_to = best_neighbor.hub
+            drone.transit_arrives_at = turn + 1
+            drone.transit_from = drone.current_zone
+            drone.transit_connection = self._edge_key(drone.current_zone.name, best_neighbor.hub.name)
+            drone.route[turn] = drone.transit_connection
+            drone.zone_route[turn] = drone.transit_connection
+        else:
+            drone.current_zone = best_neighbor.hub
+            drone.route[turn] = best_neighbor.hub.name
+            drone.zone_route[turn] = best_neighbor.hub.name
 
     def output(self) -> str:
         lines: list[str] = []
-        max_turn = max(len(d.route) for d in self.drone_list) if self.drone_list else 0
+        all_keys: list[int] = [key for drone in self.drone_list for key in drone.route.keys()]
+        max_turn: int = max(all_keys) + 1 if all_keys else 0
         for turn in range(max_turn):
             movements: list[str] = []
-            for d in self.drone_list:
-                if turn in d.route:
-                    movements.append(f'D{d.id}-{d.route[turn]}')
+            for drone in self.drone_list:
+                if turn in drone.route:
+                    value: str = drone.route[turn]
+                    movements.append(f'D{drone.id}-{value}')
             if movements:
                 lines.append(' '.join(movements))
         return '\n'.join(lines)

@@ -1,6 +1,10 @@
 VENV   := .venv
 PYTHON := $(shell pwd)/$(VENV)/bin/python3
 PIP    := $(shell pwd)/$(VENV)/bin/pip
+MAPS   := easy/01_linear_path easy/02_simple_fork easy/03_basic_capacity \
+          medium/01_dead_end_trap medium/02_circular_loop medium/03_priority_puzzle \
+          hard/01_maze_nightmare hard/02_capacity_hell hard/03_ultimate_challenge \
+          challenger/01_the_impossible_dream
 install:
 	@echo "Setting up virtual environment..."
 	@python3 -m venv $(VENV)
@@ -27,4 +31,13 @@ lint-strict:
 	@$(VENV)/bin/mypy . --exclude='\.venv' --strict && \
   	$(VENV)/bin/flake8 . --exclude=.venv,__pycache__
 
-.PHONY: install run debug clean lint lint-strict
+visual:
+	@mkdir -p output
+	@for map in $(MAPS); do \
+		name=$${map##*/}; \
+		echo "Generating output/$$name.html ..."; \
+		$(PYTHON) visualizer.py maps/$$map.txt output/$$name.html; \
+	done
+	@echo "Done. HTML files in output/"
+
+.PHONY: install run debug clean lint lint-strict visual

@@ -1,5 +1,10 @@
 from typing import Any
 from hub import Hub
+from strenum import StrEnum
+
+
+class TypeMetadata(StrEnum):
+    MAX_LINK_CAPACITY = 'max_link_capacity'
 
 
 class Connection():
