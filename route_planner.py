@@ -1,4 +1,3 @@
-import random
 from network_zone import NetworkZone
 from drone import Drone
 from mapper import Mapper, MapNode
@@ -82,7 +81,7 @@ class RoutePlanner():
             drone.transit_from = None
             drone.transit_connection = None
 
-    def _is_valid_neighbor(self, drone: Drone, current_node: MapNode, neighbor: MapNode) -> bool:
+    def _is_valid_neighbor(self, drone: Drone, current_node: MapNode, neighbor: MapNode, turn: int) -> bool:
         if neighbor.remaining_cost == -1:
             return False
         is_special: bool = neighbor.hub == self.network_zone.end or neighbor.hub == self.network_zone.start
@@ -102,9 +101,9 @@ class RoutePlanner():
             1 for d in self.drone_list
             if d.id != drone.id
             and (
-                (d.current_zone == current_node.hub
-                 and d.route
-                 and list(d.route.values())[-1] == neighbor.hub.name)
+                (turn in d.route
+                 and d.route[turn] == neighbor.hub.name
+                 and (turn == 0 or d.route.get(turn - 1) == current_node.hub.name))
                 or (d.in_transit and d.transit_connection == link_key)
             )
         )
@@ -116,7 +115,7 @@ class RoutePlanner():
         self, drone: Drone, neighbor: MapNode,
         visits: dict[str, int], prev_node_name: str | None
     ) -> float:
-        static_cost: int = neighbor.remaining_cost + neighbor.hub.get_turn_zone()
+        static_cost: int = neighbor.remaining_cost
         is_special: bool = (
             neighbor.hub == self.network_zone.end
             or neighbor.hub == self.network_zone.start
@@ -141,7 +140,7 @@ class RoutePlanner():
             if priority:
                 best = priority
             if len(best) > 1:
-                random.shuffle(best)
+                best.sort(key=lambda c: c[1].hub.name)
         return best[0][1]
 
     def _move(self, drone: Drone, turn: int) -> None:
@@ -152,12 +151,12 @@ class RoutePlanner():
 
         candidates: list[tuple[float, MapNode]] = []
         for neighbor in current_node.neighbors.values():
-            if not self._is_valid_neighbor(drone, current_node, neighbor):
+            if not self._is_valid_neighbor(drone, current_node, neighbor, turn):
                 continue
             score: float = self._score_neighbor(drone, neighbor, visits, prev_node_name)
             candidates.append((score, neighbor))
 
-        stay_score: float = current_node.remaining_cost + 0.1
+        stay_score: int = current_node.remaining_cost + 1
         has_progress: bool = any(
             n.remaining_cost < current_node.remaining_cost
             for _, n in candidates
