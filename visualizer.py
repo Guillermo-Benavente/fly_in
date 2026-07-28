@@ -105,6 +105,26 @@ def build_drone_positions(planner: RoutePlanner, start_hub_name: str, hub_positi
     return result
 
 
+def build_hub_occupancy(planner: RoutePlanner, start_hub_name: str, total_turns: int) -> dict[int, dict[str, int]]:
+    result: dict[int, dict[str, int]] = {}
+    # turn -1: estado inicial (todos los drones en start)
+    result[-1] = {start_hub_name: len(planner.drone_list)}
+    for turn in range(total_turns):
+        occ: dict[str, int] = {}
+        for d in planner.drone_list:
+            loc: str | None = None
+            for t in range(turn, -1, -1):
+                if t in d.route:
+                    v: str = d.route[t]
+                    if '-' not in v:
+                        loc = v
+                    break
+            if loc:
+                occ[loc] = occ.get(loc, 0) + 1
+        result[turn] = occ
+    return result
+
+
 def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
     all_hubs: list[Hub] = [network_zone.start, network_zone.end, *network_zone.hubs]
 
@@ -129,9 +149,16 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
     drone_positions = build_drone_positions(planner, network_zone.start.name, hub_positions, total_turns)
     drone_positions_json = json.dumps(drone_positions)
 
+    hub_occupancy = build_hub_occupancy(planner, network_zone.start.name, total_turns)
+    hub_occupancy_json = json.dumps(hub_occupancy)
+
     keyframes_css: list[str] = []
     for d in planner.drone_list:
         keyframes_css.append(generate_keyframes(d.id, d.route, d.zone_route, network_zone.start.name, hub_positions, total_turns))
+
+    hub_max: dict[str, int] = {}
+    for h in all_hubs:
+        hub_max[h.name] = int(h.metadata.get('max_drones', 1))
 
     hubs_html: list[str] = []
     for h in all_hubs:
@@ -144,10 +171,11 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
             border = '3px solid #2ecc71'
         elif h == network_zone.end:
             border = '3px solid #e74c3c'
-        label = h.name
+        max_d = hub_max[h.name]
         hubs_html.append(
-            f'<div class="hub" style="left:{x}px; top:{y}px; background:{color}; border:{border};">'
-            f'<span>{label}</span></div>'
+            f'<div class="hub" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_d}">'
+            f'<span>{h.name}</span>'
+            f'<span class="hub-occ" id="occ-{h.name}">0/{max_d}</span></div>'
         )
 
     conns_html: list[str] = []
@@ -293,6 +321,19 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
     overflow: hidden;
     word-break: break-all;
   }}
+  .hub-occ {{
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: #fff;
+    background: rgba(0,0,0,0.7);
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }}
   .drone {{
     position: absolute;
     width: 22px; height: 22px;
@@ -350,8 +391,19 @@ let autoMode = true;
 let currentTurn = 0;
 let animStart = performance.now();
 let moving = false;
+let occInterval = null;
 
 const animCSS = {json.dumps({f'drone{d.id}': f'drone{d.id} {anim_duration}s linear infinite' for d in planner.drone_list})};
+const hubOccupancy = {hub_occupancy_json};
+
+function updateHubOccupancy(turn) {{
+  const occ = hubOccupancy[turn] || {{}};
+  document.querySelectorAll('.hub-occ').forEach(el => {{
+    const max = el.parentElement.dataset.max;
+    const count = occ[el.id.replace('occ-', '')] || 0;
+    el.textContent = count + '/' + max;
+  }});
+}}
 
 function applyTurn(turn, animate) {{
   const drones = document.querySelectorAll('.drone');
@@ -369,12 +421,14 @@ function applyTurn(turn, animate) {{
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
   }}
+  updateHubOccupancy(turn);
 }}
 
 function setTurn(turn, animate) {{
   currentTurn = Math.max(0, Math.min(turn, totalTurns));
   applyTurn(currentTurn, animate);
   document.getElementById('turnDisplay').textContent = 'Turn ' + currentTurn + '/' + totalTurns;
+  updateHubOccupancy(currentTurn === 0 ? -1 : currentTurn - 1);
   updateButtons();
 }}
 
@@ -404,11 +458,21 @@ function toggleMode() {{
     animStart = performance.now() - (currentTurn * 1000);
     document.getElementById('prevBtn').disabled = true;
     document.getElementById('nextBtn').disabled = true;
+    if (occInterval) clearInterval(occInterval);
+    occInterval = setInterval(() => {{
+      const elapsed = performance.now() - animStart;
+      const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
+      updateHubOccupancy(t === 0 ? -1 : t - 1);
+    }}, 200);
   }} else {{
     btn.textContent = 'Auto';
     btn.classList.add('active');
+    if (occInterval) {{
+      clearInterval(occInterval);
+      occInterval = null;
+    }}
     const elapsed = performance.now() - animStart;
-    currentTurn = Math.floor(elapsed / 1000) % totalTurns;
+    currentTurn = Math.floor((elapsed + 500) / 1000) % totalTurns;
     drones.forEach(d => {{
       d.style.animation = 'none';
       d.style.transition = 'left ' + moveTime + 'ms ease, top ' + moveTime + 'ms ease';
@@ -430,6 +494,12 @@ document.addEventListener('keydown', (e) => {{
   if (e.key === 'ArrowLeft') {{ e.preventDefault(); prevTurn(); }}
   if (e.key === 'ArrowRight') {{ e.preventDefault(); nextTurn(); }}
 }});
+
+occInterval = setInterval(() => {{
+  const elapsed = performance.now() - animStart;
+  const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
+  updateHubOccupancy(t === 0 ? -1 : t - 1);
+}}, 200);
 </script>
 </body>
 </html>'''
