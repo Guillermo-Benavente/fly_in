@@ -131,7 +131,7 @@ class RoutePlanner():
         visit_penalty: int = 5 * max(0, visits.get(neighbor.hub.name, 0) - 1)
         return static_cost + traffic_penalty + backtrack_penalty + visit_penalty
 
-    def _pick_best(self, candidates: list[tuple[float, MapNode]], avoid_name: str | None = None) -> MapNode:
+    def _pick_best(self, candidates: list[tuple[float, MapNode]], avoid_name: str | None = None, drone_id: int = 0) -> MapNode:
         min_score: float = min(c[0] for c in candidates)
         best: list[tuple[float, MapNode]] = [c for c in candidates if c[0] == min_score]
         if len(best) > 1 and avoid_name:
@@ -149,7 +149,10 @@ class RoutePlanner():
                 max_pc: int = max(c[1].priority_count for c in best)
                 best = [c for c in best if c[1].priority_count == max_pc]
             if len(best) > 1:
-                best.sort(key=lambda c: c[1].hub.name)
+                names: list[str] = sorted(set(c[1].hub.name for c in best))
+                offset: int = drone_id % len(names)
+                rotated: list[str] = names[offset:] + names[:offset]
+                best.sort(key=lambda c: rotated.index(c[1].hub.name))
         return best[0][1]
 
     def _stuck_turns(self, drone: Drone) -> int:
@@ -168,29 +171,22 @@ class RoutePlanner():
         prev_node_name: str | None = list(drone.route.values())[-1] if drone.route else None
         stuck: int = self._stuck_turns(drone)
 
-        forward: list[MapNode] = [
-            n for n in current_node.neighbors.values()
-            if self._is_valid_neighbor(drone, current_node, n, turn)
-            and n.remaining_cost < current_node.remaining_cost
-        ]
-        if forward:
-            min_rc: int = min(n.remaining_cost for n in forward)
-            best_forward: list[MapNode] = [n for n in forward if n.remaining_cost == min_rc]
-            return self._pick_best([(0.0, n) for n in best_forward])
-
         candidates: list[tuple[float, MapNode]] = []
         for neighbor in current_node.neighbors.values():
             if not self._is_valid_neighbor(drone, current_node, neighbor, turn):
                 continue
             score: float = self._score_neighbor(drone, neighbor, visits, prev_node_name)
-            if stuck > 1:
-                score -= stuck * 2
-            candidates.append((score, neighbor))
+            if neighbor.remaining_cost < current_node.remaining_cost:
+                score -= 3
+            if stuck > 2:
+                score -= min(stuck, 5)
+            candidates.append((score + drone.id * 0.0001, neighbor))
 
-        stay_score: int = current_node.remaining_cost + 1 + stuck * 3
+        stay_score: float = current_node.remaining_cost + 1 - 0.01 + drone.id * 0.0001
         candidates.append((stay_score, current_node))
 
-        return self._pick_best(candidates, avoid_name=drone.current_zone.name)
+        avoid: str | None = drone.current_zone.name if stuck == 0 else None
+        return self._pick_best(candidates, avoid_name=avoid, drone_id=drone.id)
 
     def _execute_move(self, drone: Drone, target: MapNode, turn: int) -> None:
         is_restricted: bool = target.hub.metadata.get('zone') == 'restricted'
@@ -201,13 +197,12 @@ class RoutePlanner():
             return
 
         if is_restricted:
+            drone.current_zone = target.hub
+            drone.route[turn] = target.hub.name
+            drone.zone_route[turn] = target.hub.name
             drone.in_transit = True
             drone.transit_to = target.hub
             drone.transit_arrives_at = turn + 1
-            drone.transit_from = drone.current_zone
-            drone.transit_connection = self._edge_key(drone.current_zone.name, target.hub.name)
-            drone.route[turn] = drone.transit_connection
-            drone.zone_route[turn] = drone.transit_connection
         else:
             drone.current_zone = target.hub
             drone.route[turn] = target.hub.name

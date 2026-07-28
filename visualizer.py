@@ -166,7 +166,12 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
         color_raw = h.metadata.get('color', 'white')
         color = COLOR_MAP.get(str(color_raw), '#eee')
         zone = h.metadata.get('zone', 'normal')
-        border = '3px solid #fff' if zone == 'priority' else '3px solid #555'
+        if zone == 'restricted':
+            border = '3px dashed #e74c3c'
+        elif zone == 'priority':
+            border = '3px solid #fff'
+        else:
+            border = '3px solid #555'
         if h == network_zone.start:
             border = '3px solid #2ecc71'
         elif h == network_zone.end:
