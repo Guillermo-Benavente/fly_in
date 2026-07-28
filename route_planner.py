@@ -183,6 +183,8 @@ class RoutePlanner():
             candidates.append((score + drone.id * 0.0001, neighbor))
 
         stay_score: float = current_node.remaining_cost + 1 - 0.01 + drone.id * 0.0001
+        if drone.current_zone.name == self.network_zone.start.name:
+            stay_score += 2
         candidates.append((stay_score, current_node))
 
         avoid: str | None = drone.current_zone.name if stuck == 0 else None
