@@ -52,15 +52,15 @@ class Parser():
                             raise ValueError('Value of start hub already set.')
                     case TypeData.END_HUB:
                         if network_zone.end == None:
-                            data: list[Any] = self.extract_data(value)
+                            data = self.extract_data(value)
                             network_zone.end = Hub(*data)
                         else:
                             raise ValueError('Value of end hub already set.')
                     case TypeData.HUB:
-                        data: list[Any] = self.extract_data(value)
+                        data = self.extract_data(value)
                         network_zone.hubs.append(Hub(*data))
                     case TypeData.CONNECTION:
-                        data: list[Any] = self.extract_data(value)
+                        data = self.extract_data(value)
                         network_zone.connections.append(Connection(*data, self.hub_data(network_zone)))
             hubs: list[Hub] = self.hub_data(network_zone)
             hub_names: list[str] = [hub.name for hub in hubs]

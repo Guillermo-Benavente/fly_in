@@ -1,4 +1,5 @@
 from network_zone import NetworkZone
+from hub import TypeZone, TypeMetadata as TMHub
 from drone import Drone
 from mapper import Mapper, MapNode
 
@@ -55,10 +56,8 @@ class RoutePlanner():
                 ]
                 raise RuntimeError(f'Infinite loop detected. Stuck drones: {stuck}')
             active.sort(key=lambda drone: self.mapper.nodes[drone.current_zone.name].remaining_cost)
-
             for drone in active:
                 self._move(drone, iteration)
-
             iteration += 1
 
     def _create_drones(self) -> list[Drone]:
@@ -132,28 +131,41 @@ class RoutePlanner():
         return static_cost + traffic_penalty + backtrack_penalty + visit_penalty
 
     def _pick_best(self, candidates: list[tuple[float, MapNode]], avoid_name: str | None = None, drone_id: int = 0) -> MapNode:
-        min_score: float = min(c[0] for c in candidates)
-        best: list[tuple[float, MapNode]] = [c for c in candidates if c[0] == min_score]
-        if len(best) > 1 and avoid_name:
-            moved: list[tuple[float, MapNode]] = [c for c in best if c[1].hub.name != avoid_name]
+        min_score: float = min(candidate[0] for candidate in candidates)
+        best_candidates: list[tuple[float, MapNode]] = [
+            candidate
+            for candidate
+            in candidates
+            if candidate[0] == min_score
+        ]
+        is_one_candidate: int = len(best_candidates) == 1
+        if not is_one_candidate and avoid_name:
+            moved: list[tuple[float, MapNode]] = [
+                candidate
+                for candidate
+                in best_candidates
+                if candidate[1].hub.name != avoid_name
+            ]
             if moved:
-                best = moved
-        if len(best) > 1:
+                best_candidates = moved
+        if not is_one_candidate:
             priority: list[tuple[float, MapNode]] = [
-                c for c in best
-                if c[1].hub.metadata.get('zone') == 'priority'
+                candidate
+                for candidate
+                in best_candidates
+                if candidate[1].hub.metadata.get(TMHub.ZONE) == TypeZone.PRIORITY
             ]
             if priority:
-                best = priority
-            if len(best) > 1:
-                max_pc: int = max(c[1].priority_count for c in best)
-                best = [c for c in best if c[1].priority_count == max_pc]
-            if len(best) > 1:
-                names: list[str] = sorted(set(c[1].hub.name for c in best))
+                best_candidates = priority
+            if not is_one_candidate:
+                max_pc: int = max(candidate[1].priority_count for candidate in best_candidates)
+                best_candidates = [candidate for candidate in best_candidates if candidate[1].priority_count == max_pc]
+            if not is_one_candidate:
+                names: list[str] = sorted(set(candidate[1].hub.name for candidate in best_candidates))
                 offset: int = drone_id % len(names)
                 rotated: list[str] = names[offset:] + names[:offset]
-                best.sort(key=lambda c: rotated.index(c[1].hub.name))
-        return best[0][1]
+                best_candidates.sort(key=lambda candidate: rotated.index(candidate[1].hub.name))
+        return best_candidates[0][1]
 
     def _stuck_turns(self, drone: Drone) -> int:
         current: str = drone.current_zone.name
@@ -170,7 +182,6 @@ class RoutePlanner():
         visits: dict[str, int] = self.visit_counter[drone.id]
         prev_node_name: str | None = list(drone.route.values())[-1] if drone.route else None
         stuck: int = self._stuck_turns(drone)
-
         candidates: list[tuple[float, MapNode]] = []
         for neighbor in current_node.neighbors.values():
             if not self._is_valid_neighbor(drone, current_node, neighbor, turn):
@@ -181,35 +192,31 @@ class RoutePlanner():
             if stuck > 2:
                 score -= min(stuck, 5)
             candidates.append((score + drone.id * 0.0001, neighbor))
-
-        stay_score: float = current_node.remaining_cost + 1 - 0.01 + drone.id * 0.0001
+        stay_score: float = current_node.remaining_cost + 0.99 + drone.id * 0.0001
         if drone.current_zone.name == self.network_zone.start.name:
             stay_score += 2
         candidates.append((stay_score, current_node))
-
         avoid: str | None = drone.current_zone.name if stuck == 0 else None
-        return self._pick_best(candidates, avoid_name=avoid, drone_id=drone.id)
+        return self._pick_best(candidates, avoid, drone.id)
 
     def _execute_move(self, drone: Drone, target: MapNode, turn: int) -> None:
-        is_restricted: bool = target.hub.metadata.get('zone') == 'restricted'
-
+        is_restricted: bool = target.hub.metadata.get(TMHub.ZONE) == TypeZone.RESTRICTED
         if target.hub.name == drone.current_zone.name:
             drone.route[turn] = drone.current_zone.name
             drone.zone_route[turn] = drone.current_zone.name
-            return
-
-        if is_restricted:
-            drone.current_zone = target.hub
-            drone.route[turn] = target.hub.name
-            drone.zone_route[turn] = target.hub.name
-            drone.in_transit = True
-            drone.transit_to = target.hub
-            drone.transit_arrives_at = turn + 1
         else:
-            drone.current_zone = target.hub
-            drone.route[turn] = target.hub.name
-            drone.zone_route[turn] = target.hub.name
-        self.visit_counter[drone.id][target.hub.name] += 1
+            if is_restricted:
+                drone.current_zone = target.hub
+                drone.route[turn] = target.hub.name
+                drone.zone_route[turn] = target.hub.name
+                drone.in_transit = True
+                drone.transit_to = target.hub
+                drone.transit_arrives_at = turn + 1
+            else:
+                drone.current_zone = target.hub
+                drone.route[turn] = target.hub.name
+                drone.zone_route[turn] = target.hub.name
+            self.visit_counter[drone.id][target.hub.name] += 1
 
     def _move(self, drone: Drone, turn: int) -> None:
         target: MapNode = self._plan_move(drone, turn)
