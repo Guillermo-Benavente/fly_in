@@ -37,7 +37,7 @@ class Mapper:
             final_node: MapNode = self.nodes[final_hub_name]
             init_node.neighbors[final_hub_name] = final_node
             final_node.neighbors[init_hub_name] = init_node
-            unique_name: str = f'{min(init_hub_name, final_hub_name)}-{max(init_hub_name, final_hub_name)}'
+            unique_name: str = self.connection_key(init_hub_name, final_hub_name)
             self.connection_capacity[unique_name] = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
         self._calculate_remaining_costs(network_zone.end.name)
         self._calculate_priority_counts()
@@ -66,3 +66,7 @@ class Mapper:
                     new_count: int = node.priority_count + bonus
                     if new_count > neighbor.priority_count:
                         neighbor.priority_count = new_count
+
+    @staticmethod
+    def connection_key(current_hub: str, next_hub: str) -> str:
+        return f'{min(current_hub, next_hub)}-{max(current_hub, next_hub)}'

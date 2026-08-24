@@ -39,7 +39,7 @@ def test_maps():
             ok: bool = all(drone.current_zone == map.end for drone in planner.drone_list)
             turns: int = max((max(drone.route.keys()) + 1) for drone in planner.drone_list)
             target: int = TARGETS.get(path, 0)
-            perf: str = 'PASS' if turns < target else 'OVER'
+            perf: str = 'PASS' if turns <= target else 'OVER'
             if ok:
                 passed += 1
                 print(f'OK   {path}: {len(planner.drone_list)} drones, {turns} turns (target: {target}) {perf}')

@@ -45,60 +45,63 @@ def _midpoint(hub_a: str, hub_b: str, hub_positions: dict[str, tuple[int, int]])
     return (x1 + x2) // 2, (y1 + y2) // 2
 
 
-def generate_keyframes(drone_id: int, route: dict[int, str], zone_route: dict[int, str], start_hub_name: str, hub_positions: dict[str, tuple[int, int]], total_turns: int) -> str:
+def generate_keyframes(
+    drone_id: int, 
+    route: dict[int, str], 
+    start_hub_name: str, 
+    hub_positions: dict[str, tuple[int, int]], 
+    total_turns: int
+) -> str:
     positions: list[str] = []
     current = start_hub_name
     transit_mid: dict[int, tuple[int, int]] = {}
     for turn in range(total_turns):
         if turn in route:
-            current = route[turn]
-        if turn in zone_route:
-            parsed = _parse_transit(zone_route[turn])
+            val = route[turn]
+            parsed = _parse_transit(val)
             if parsed:
                 transit_mid[turn] = _midpoint(parsed[0], parsed[1], hub_positions)
+            else:
+                current = val
         positions.append(current)
-
-    lines: list[str] = []
-    lines.append(f'@keyframes drone{drone_id} {{')
-
+    lines: list[str] = [f'@keyframes drone{drone_id} {{']
     sx, sy = hub_positions[start_hub_name]
     lines.append(f'  0% {{ left: {sx}px; top: {sy}px; }}')
-
     for i, hub_name in enumerate(positions):
         turn_num = i
+        move_pct = ((i + 0.5) / total_turns) * 100
+        hold_pct = ((i + 1) / total_turns) * 100
         if turn_num in transit_mid:
-            mx, my = transit_mid[turn_num]
-            move_pct = ((i + 0.5) / total_turns) * 100
-            hold_pct = ((i + 1) / total_turns) * 100
-            lines.append(f'  {move_pct:.2f}% {{ left: {mx}px; top: {my}px; }}')
-            lines.append(f'  {hold_pct:.2f}% {{ left: {mx}px; top: {my}px; }}')
+            x, y = transit_mid[turn_num]
         else:
             x, y = hub_positions[hub_name]
-            move_pct = ((i + 0.5) / total_turns) * 100
-            hold_pct = ((i + 1) / total_turns) * 100
-            lines.append(f'  {move_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
-            lines.append(f'  {hold_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
-
+        lines.append(f'  {move_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
+        lines.append(f'  {hold_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
     lines.append('}')
     return '\n'.join(lines)
 
 
-def build_drone_positions(planner: RoutePlanner, start_hub_name: str, hub_positions: dict[str, tuple[int, int]], total_turns: int) -> dict[int, list[dict[str, int]]]:
+def build_drone_positions(
+    planner: RoutePlanner, 
+    start_hub_name: str, 
+    hub_positions: dict[str, tuple[int, int]], 
+    total_turns: int
+) -> dict[int, list[dict[str, int]]]:
     result: dict[int, list[dict[str, int]]] = {}
     for d in planner.drone_list:
         sx, sy = hub_positions[start_hub_name]
         positions: list[dict[str, int]] = [{'x': sx, 'y': sy}]
         current = start_hub_name
         for turn in range(total_turns):
-            if turn in d.zone_route:
-                parsed = _parse_transit(d.zone_route[turn])
+            if turn in d.route:
+                val = d.route[turn]
+                parsed = _parse_transit(val)
                 if parsed:
                     mx, my = _midpoint(parsed[0], parsed[1], hub_positions)
                     positions.append({'x': mx, 'y': my})
-                    current = d.zone_route[turn]
                     continue
-            if turn in d.route:
-                current = d.route[turn]
+                else:
+                    current = val
             x, y = hub_positions[current]
             positions.append({'x': x, 'y': y})
         result[d.id] = positions
@@ -154,7 +157,7 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
 
     keyframes_css: list[str] = []
     for d in planner.drone_list:
-        keyframes_css.append(generate_keyframes(d.id, d.route, d.zone_route, network_zone.start.name, hub_positions, total_turns))
+        keyframes_css.append(generate_keyframes(d.id, d.route, network_zone.start.name, hub_positions, total_turns))
 
     hub_max: dict[str, int] = {}
     for h in all_hubs:
