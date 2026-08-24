@@ -518,7 +518,7 @@ def main():
 
     map_file = sys.argv[1]
     output_path = sys.argv[2] if len(sys.argv) == 3 else 'output.html'
-    network_zone = Parser(map_file).paser()
+    network_zone = Parser(map_file).parser()
     planner = RoutePlanner(network_zone)
 
     html = generate_html(network_zone, planner)

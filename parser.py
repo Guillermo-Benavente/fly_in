@@ -19,7 +19,7 @@ class Parser():
     def __init__(self, file: str) -> None:
         self.file = file
 
-    def paser(self) -> NetworkZone:
+    def parser(self) -> NetworkZone:
         with open(self.file) as file:
             lines: list[str] = [line for line in file.readlines() if not line.startswith('#') and line.strip()]
             if not self.first_drones_line(lines[0]):

@@ -34,10 +34,10 @@ def test_maps():
     failed: int = 0
     for path in maps:
         try:
-            map: NetworkZone = Parser(f'./maps/{path}.txt').paser()
+            map: NetworkZone = Parser(f'./maps/{path}.txt').parser()
             planner = RoutePlanner(map)
             ok: bool = all(drone.current_zone == map.end for drone in planner.drone_list)
-            turns: int = max((max(d.route.keys()) + 1) for d in planner.drone_list)
+            turns: int = max((max(drone.route.keys()) + 1) for drone in planner.drone_list)
             target: int = TARGETS.get(path, 0)
             perf: str = 'PASS' if turns < target else 'OVER'
             if ok:

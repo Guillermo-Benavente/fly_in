@@ -41,6 +41,7 @@ class Hub():
     coord_x: int
     coord_y: int
     metadata: dict[str, Any]
+    drones_number: int
     
     def __init__(self, name: str, coord_x: str, coord_y: str, metadata: dict[str, Any]) -> None:
         self.parser(name, coord_x, coord_y, metadata)
@@ -48,6 +49,7 @@ class Hub():
         self.coord_x = int(coord_x)
         self.coord_y = int(coord_y)
         self.metadata = metadata
+        self.drones_number: int = 0
 
     @staticmethod
     def parser(

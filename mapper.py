@@ -1,5 +1,5 @@
 from collections import deque
-from hub import Hub, TypeMetadata as TMHub
+from hub import Hub, TypeZone, TypeMetadata as TMHub
 from connection import TypeMetadata as TMConnection
 from network_zone import NetworkZone
 
@@ -21,11 +21,11 @@ class MapNode:
 
 class Mapper:
     nodes: dict[str, MapNode]
-    link_capacity: dict[str, int]
+    connection_capacity: dict[str, int]
 
     def __init__(self, network_zone: NetworkZone) -> None:
         self.nodes = {}
-        self.link_capacity = {}
+        self.connection_capacity = {}
         all_hubs: list[Hub] = [*network_zone.hubs, network_zone.start, network_zone.end]
         for hub in all_hubs:
             self.nodes[hub.name] = MapNode(hub)
@@ -38,7 +38,7 @@ class Mapper:
             init_node.neighbors[final_hub_name] = final_node
             final_node.neighbors[init_hub_name] = init_node
             unique_name: str = f'{min(init_hub_name, final_hub_name)}-{max(init_hub_name, final_hub_name)}'
-            self.link_capacity[unique_name] = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
+            self.connection_capacity[unique_name] = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
         self._calculate_remaining_costs(network_zone.end.name)
         self._calculate_priority_counts()
 
@@ -62,7 +62,7 @@ class Mapper:
             for neighbor in node.neighbors.values():
                 expected_rc: int = node.remaining_cost + neighbor.hub.get_turn_zone()
                 if neighbor.remaining_cost == expected_rc:
-                    bonus: int = 1 if neighbor.hub.metadata.get('zone') == 'priority' else 0
+                    bonus: int = 1 if neighbor.hub.metadata.get(TMHub.ZONE) == TypeZone.PRIORITY else 0
                     new_count: int = node.priority_count + bonus
                     if new_count > neighbor.priority_count:
                         neighbor.priority_count = new_count
