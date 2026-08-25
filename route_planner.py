@@ -134,8 +134,23 @@ class RoutePlanner():
         ):
             return False
         return True
-    
+
     def output(self) -> str:
+        lines: list[str] = []
+        max_turns: int = max([len(dron.route) for dron in self.drone_list]) + 1
+        for iteration in range(max_turns):
+            movements: list[str] = []
+            for drone in self.drone_list:
+                if iteration in drone.route:
+                    last_value: str = drone.route.get(iteration - 1, "")
+                    value: str = drone.route.get(iteration, "")
+                    if last_value != value and value != self.network_zone.start.name:
+                        movements.append(f'D{drone.id}-{value}')
+            if movements:
+                lines.append(' '.join(movements))
+        return '\n'.join(lines)
+
+    def output_old(self) -> str:
         lines: list[str] = []
         all_keys: list[int] = [key for drone in self.drone_list for key in drone.route.keys()]
         max_turn: int = max(all_keys) + 1 if all_keys else 0
