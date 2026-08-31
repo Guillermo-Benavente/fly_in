@@ -26,7 +26,7 @@ class Mapper:
     def __init__(self, network_zone: NetworkZone) -> None:
         self.nodes = {}
         self.connection_capacity = {}
-        all_hubs: list[Hub] = [*network_zone.hubs, network_zone.start, network_zone.end]
+        all_hubs: list[Hub] = network_zone.all_hubs()
         for hub in all_hubs:
             self.nodes[hub.name] = MapNode(hub)
         for connection in network_zone.connections:

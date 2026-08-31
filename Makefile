@@ -13,14 +13,15 @@ install:
 	@$(PIP) install pydantic flake8 mypy > /dev/null 2>&1
 	@$(PIP) install -r requirements.txt
 	@echo "Done."
+
 run:
-	@$(PYTHON) fly_in.py
+	@$(PYTHON) fly_in.py $(MAP)
 
 debug:
-	@$(PYTHON) -m pdb fly_in.py
+	@$(PYTHON) -m pdb fly_in.py $(MAP)
 
 clean:
-	@rm -rf __pycache__ .mypy_cache 
+	@rm -rf __pycache__ .mypy_cache output
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 lint:
@@ -29,7 +30,7 @@ lint:
 
 lint-strict:
 	@$(VENV)/bin/mypy . --exclude='\.venv' --strict && \
-  	$(VENV)/bin/flake8 . --exclude=.venv,__pycache__
+	$(VENV)/bin/flake8 . --exclude=.venv,__pycache__
 
 visual:
 	@mkdir -p output

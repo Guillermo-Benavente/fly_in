@@ -1,5 +1,5 @@
 from network_zone import NetworkZone
-from hub import TypeZone, TypeMetadata as TMHub
+from hub import TypeZone, TypeMetadata as TMHub, TypeConsoleColor, Hub
 from drone import Drone
 from mapper import Mapper, MapNode
 
@@ -71,11 +71,20 @@ class RoutePlanner():
             next_node.hub.drones_number += 1
             key: str = Mapper.connection_key(drone.current_zone.name, next_node.hub.name)
             iteration_route[key] = iteration_route.get(key, 0) + 1
-            drone.current_zone = next_node.hub
-            drone.route[iteration] = next_node.hub.name
             if is_restricted:
                 drone.in_transit = True
+                drone.route[iteration] = self._get_connection_name(drone.current_zone.name, next_node.hub.name)
+            else:
+                drone.route[iteration] = next_node.hub.name
+            drone.current_zone = next_node.hub
 
+    def _get_connection_name(self, hub_a: str, hub_b: str) -> str:
+        for conn in self.network_zone.connections:
+            if conn.init_hub.name == hub_a and conn.final_hub.name == hub_b:
+                return conn.name
+            if conn.init_hub.name == hub_b and conn.final_hub.name == hub_a:
+                return conn.name
+        return Mapper.connection_key(hub_a, hub_b)
 
     def _search_next_node(
         self,
@@ -137,29 +146,25 @@ class RoutePlanner():
 
     def output(self) -> str:
         lines: list[str] = []
+        hubs_by_name = {h.name: h for h in self.network_zone.all_hubs()}
         max_turns: int = max([len(dron.route) for dron in self.drone_list]) + 1
         for iteration in range(max_turns):
             movements: list[str] = []
             for drone in self.drone_list:
                 if iteration in drone.route:
-                    last_value: str = drone.route.get(iteration - 1, "")
-                    value: str = drone.route.get(iteration, "")
-                    if last_value != value and value != self.network_zone.start.name:
-                        movements.append(f'D{drone.id}-{value}')
-            if movements:
-                lines.append(' '.join(movements))
-        return '\n'.join(lines)
-
-    def output_old(self) -> str:
-        lines: list[str] = []
-        all_keys: list[int] = [key for drone in self.drone_list for key in drone.route.keys()]
-        max_turn: int = max(all_keys) + 1 if all_keys else 0
-        for turn in range(max_turn):
-            movements: list[str] = []
-            for drone in self.drone_list:
-                if turn in drone.route:
-                    value: str = drone.route[turn]
-                    movements.append(f'D{drone.id}-{value}')
+                    last_value: str = drone.route.get(iteration - 1, '')
+                    value: str = drone.route.get(iteration, '')
+                    if last_value != value and not (value == self.network_zone.start.name and iteration == 0):
+                        hub: Hub = hubs_by_name.get(value)
+                        color_name: str = hub.metadata.get('color') if (hub and 'color' in hub.metadata) else None
+                        if color_name and color_name.lower() == 'rainbow':
+                            colored_value: str = TypeConsoleColor.rainbow(value)
+                        elif color_name and color_name.upper() in TypeConsoleColor.__members__:
+                            color: TypeConsoleColor = TypeConsoleColor[color_name.upper()]
+                            colored_value = f'{color}{value}{TypeConsoleColor.RESET}'
+                        else:
+                            colored_value = value
+                        movements.append(f'D{drone.id}-{colored_value}')
             if movements:
                 lines.append(' '.join(movements))
         return '\n'.join(lines)

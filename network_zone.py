@@ -15,6 +15,9 @@ class NetworkZone():
         self.end = None
         self.hubs = []
         self.connections = []
+
+    def all_hubs(self) -> list[Hub]:
+        return [*self.hubs, self.start, self.end]
     
     def find_connection(self, hub: Hub) -> list[Connection]:
         connection_filter: list[Connection] = []

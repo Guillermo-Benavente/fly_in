@@ -30,7 +30,10 @@ class Connection():
         metadata: dict[str, Any],
         hubs: list[Hub]
     ) -> None:
-        init_hub, final_hub = connection.split('-')
+        parts:list[str] = connection.split('-')
+        if len(parts) != 2:
+            raise ValueError(f'Invalid connection syntax: {connection}')
+        init_hub, final_hub = parts
         existing_hub_names: set[str] = {hub.name for hub in hubs}
         if init_hub not in existing_hub_names or final_hub not in existing_hub_names:
             raise ValueError('Hubs must exist to create a connection')

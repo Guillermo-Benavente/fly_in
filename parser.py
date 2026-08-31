@@ -39,6 +39,8 @@ class Parser():
                                 raise ValueError('Value of number drones already set.')
                             if nb_dron < 0:
                                 raise ValueError('Invalid drone count, the number must be positive integer.')
+                            elif nb_dron == 0:
+                                raise ValueError('Invalid drone count, the number must be at least 1.')
                             network_zone.drones = nb_dron
                         except ValueError as e:
                             if str(e):

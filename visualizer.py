@@ -14,6 +14,7 @@ COLOR_MAP: dict[str, str] = {
     'purple': '#9b59b6', 'brown': '#795548', 'maroon': '#800000',
     'gold': '#ffd700', 'lime': '#cddc39', 'crimson': '#dc143c',
     'violet': '#7c4dff', 'darkred': '#b71c1c',
+    'rainbow': 'linear-gradient(135deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)',
 }
 
 DRONE_COLORS: list[str] = [
@@ -166,8 +167,9 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
     hubs_html: list[str] = []
     for h in all_hubs:
         x, y = hub_positions[h.name]
-        color_raw = h.metadata.get('color', 'white')
-        color = COLOR_MAP.get(str(color_raw), '#eee')
+        color_raw = str(h.metadata.get('color', 'white')).lower()
+        color = COLOR_MAP.get(color_raw, '#eee')
+        is_rainbow_cls = ' rainbow-hub' if color_raw == 'rainbow' else ''
         zone = h.metadata.get('zone', 'normal')
         if zone == 'restricted':
             border = '3px dashed #fff'
@@ -181,7 +183,7 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
             border = '3px solid #e74c3c'
         max_d = hub_max[h.name]
         hubs_html.append(
-            f'<div class="hub" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_d}">'
+            f'<div class="hub{is_rainbow_cls}" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_d}">'
             f'<span>{h.name}</span>'
             f'<span class="hub-occ" id="occ-{h.name}">0/{max_d}</span></div>'
         )
@@ -371,6 +373,15 @@ def generate_html(network_zone: NetworkZone, planner: RoutePlanner) -> str:
     max-width: {map_w}px;
     overflow-x: auto;
     color: #aaa;
+  }}
+  .rainbow-hub {{
+    background-size: 200% 200% !important;
+    animation: rainbowGlow 3s ease infinite;
+  }}
+  @keyframes rainbowGlow {{
+    0% {{ background-position: 0% 50%; }}
+    50% {{ background-position: 100% 50%; }}
+    100% {{ background-position: 0% 50%; }}
   }}
 </style>
 </head>

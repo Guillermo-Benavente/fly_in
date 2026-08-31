@@ -35,6 +35,41 @@ class TypeColor(StrEnum):
     DARKRED = 'darkred'
     RAINBOW = 'rainbow'
 
+class TypeConsoleColor(StrEnum):
+    BLACK = '\033[30m'
+    WHITE = '\033[97m'
+    RED = '\033[31m'
+    BLUE = '\033[34m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    ORANGE = '\033[38;5;208m'
+    PURPLE = '\033[35m'
+    BROWN = '\033[38;5;94m'
+    MAROON = '\033[38;5;88m'
+    GOLD = '\033[38;5;220m'
+    LIME = '\033[92m'
+    CRIMSON = '\033[38;5;161m'
+    VIOLET = '\033[38;5;129m'
+    DARKRED = '\033[38;5;88m'
+    RESET = '\033[0m'
+    @classmethod
+    def rainbow(cls, text: str) -> str:
+        palette: list[str] = [
+            cls.RED,
+            cls.YELLOW,
+            cls.GREEN,
+            cls.CYAN,
+            cls.BLUE,
+            cls.MAGENTA,
+        ]
+        colored_chars: list[str] = []
+        num_colors = len(palette)
+        for i, char in enumerate(text):
+            color = palette[i % num_colors]
+            colored_chars.append(f'{color}{char}')
+        return ''.join(colored_chars) + cls.RESET
 
 class Hub():
     name: str
@@ -79,12 +114,12 @@ class Hub():
                     try:
                         TypeColor(metadata[data])
                     except ValueError:
-                        raise ValueError('Invalid zone')
+                        raise ValueError('Invalid color')
                 case TypeMetadata.MAX_DRONES:
                     try:
                         max_drones: int = int(metadata[data])
                         if not isinstance(max_drones, int) or max_drones < 1:
-                            raise ValueError( 'max_drones must be an integer greater than 1 if you want to change it')
+                            raise ValueError('max_drones must be an integer greater than 1 if you want to change it')
                     except ValueError as e:
                         if str(e):
                                 raise e
