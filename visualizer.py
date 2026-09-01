@@ -5,7 +5,8 @@ import os
 from collections import Counter
 from parser import Parser
 from route_planner import RoutePlanner
-from hub import Hub
+from hub import Hub, TypeMetadata as TMHub, TypeZone
+from connection import TypeMetadata as TMConnection
 from network_zone import NetworkZone
 from drone import Drone
 
@@ -29,59 +30,114 @@ DRONE_COLORS: list[str] = [
 ]
 
 
-def _parse_transit(value: str) -> tuple[str, str] | None:
-    if '-' in value:
-        parts = value.split('-')
-        if len(parts) == 2:
-            return parts[0], parts[1]
-    return None
-
-def _isConnection(value: str) -> bool:
-    if '-' in value:
+def _isConnection(name: str) -> bool:
+    if '-' in name:
         return True
     else:
         return False
+
+def _get_connection_hubs(name: str) -> tuple[str, str] | None:
+    if _isConnection(name):
+        parts = name.split('-')
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    return None
 
 def _connection_coords(hub_a: str, hub_b: str, hub_positions: dict[str, tuple[int, int]]) -> tuple[int, int]:
     x1, y1 = hub_positions[hub_a]
     x2, y2 = hub_positions[hub_b]
     return (x1 + x2) // 2, (y1 + y2) // 2
 
+def create_svg_connections(
+    network_zone: NetworkZone,
+    hub_positions: dict[str, tuple[int, int]]
+) -> list[str]:
+    connections_svg: list[str] = []
+    for connection in network_zone.connections:
+        init_conn_x, init_conn_y = hub_positions[connection.init_hub.name]
+        final_conn_x, final_conn_y = hub_positions[connection.final_hub.name]
+        capacity_link: int = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
+        capacity_label: str = f' [{capacity_link}]' if capacity_link > 1 else ''
+        connections_svg.append(
+            f'<line x1="{init_conn_x}" y1="{init_conn_y}" x2="{final_conn_x}" y2="{final_conn_y}" '
+            f'stroke="#555" stroke-width="2" stroke-dasharray="6,4"/>'
+        )
+        mid_x = (init_conn_x + final_conn_x) // 2
+        mid_y = (init_conn_y + final_conn_y) // 2
+        if capacity_label:
+            connections_svg.append(
+                f'<text x="{mid_x}" y="{mid_y - 6}" fill="#888" font-size="10" text-anchor="middle">'
+                f'  {capacity_label.strip()}'
+                '</text>'
+            )
+    return connections_svg
+
+def create_html_hubs(
+    all_hubs: list[Hub],
+    network_zone: NetworkZone,
+    hub_positions: dict[str, tuple[int, int]]
+) -> list[str]:
+    hubs_html: list[str] = []
+    for hub in all_hubs:
+        x, y = hub_positions[hub.name]
+        color_raw: str = str(hub.metadata.get(TMHub.COLOR, 'white')).lower()
+        color: str = COLOR_MAP.get(color_raw)
+        is_rainbow_cls: str = ' rainbow-hub' if color_raw == 'rainbow' else ''
+        zone_hub: str = hub.metadata.get(TMHub.ZONE, TypeZone.NORMAL)
+        if hub == network_zone.start:
+            border = '3px solid #2ecc71'
+        elif hub == network_zone.end:
+            border = '3px solid #e74c3c'
+        elif zone_hub == TypeZone.RESTRICTED:
+            border: str = '3px dashed #fff'
+        elif zone_hub == TypeZone.PRIORITY:
+            border = '3px solid #fff'
+        else:
+            border = '3px solid #555'
+        max_drones: int = int(hub.metadata.get(TMHub.MAX_DRONES, 1))
+        hubs_html.append(
+            f'<div class="hub{is_rainbow_cls}" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_drones}">'
+            f'<span>{hub.name}</span>'
+            f'<span class="hub-occ" id="occ-{hub.name}">0/{max_drones}</span></div>'
+        )
+    return hubs_html
 
 def generate_keyframes(
-    drone_id: int, 
-    route: dict[int, str], 
-    start_hub_name: str, 
-    hub_positions: dict[str, tuple[int, int]], 
+    drone: Drone,
+    network_zone: NetworkZone,
+    hub_positions: dict[str, tuple[int, int]],
     total_turns: int
 ) -> str:
     positions: list[str] = []
-    current = start_hub_name
-    transit_mid: dict[int, tuple[int, int]] = {}
+    current_hub_name: str = network_zone.start.name
+    hub_restricted_positions: dict[int, tuple[int, int]] = {}
     for turn in range(total_turns):
-        if turn in route:
-            val = route[turn]
-            parsed = _parse_transit(val)
-            if parsed:
-                transit_mid[turn] = _connection_coords(parsed[0], parsed[1], hub_positions)
+        if turn in drone.route:
+            position_name = drone.route[turn]
+            connection_hubs = _get_connection_hubs(position_name)
+            if connection_hubs:
+                init_hub, final_hub = connection_hubs
+                hub_restricted_positions[turn] = _connection_coords(init_hub, final_hub, hub_positions)
             else:
-                current = val
-        positions.append(current)
-    lines: list[str] = [f'@keyframes drone{drone_id} {{']
-    sx, sy = hub_positions[start_hub_name]
-    lines.append(f'  0% {{ left: {sx}px; top: {sy}px; }}')
-    for i, hub_name in enumerate(positions):
-        turn_num = i
-        move_pct = ((i + 0.5) / total_turns) * 100
-        hold_pct = ((i + 1) / total_turns) * 100
-        if turn_num in transit_mid:
-            x, y = transit_mid[turn_num]
+                current_hub_name = position_name
+        positions.append(current_hub_name)
+    drone_animations: list[str] = [f'@keyframes drone{drone.id} {{']
+    start_coord_x, start_coord_y = hub_positions[network_zone.start.name]
+    drone_animations.append(f'  0% {{ left: {start_coord_x}px; top: {start_coord_y}px; }}')
+    for turn, hub_name in enumerate(positions):
+        move_percent = ((turn + 0.5) / total_turns) * 100
+        hold_percent = ((turn + 1) / total_turns) * 100
+        if turn in hub_restricted_positions:
+            x, y = hub_restricted_positions[turn]
         else:
             x, y = hub_positions[hub_name]
-        lines.append(f'  {move_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
-        lines.append(f'  {hold_pct:.2f}% {{ left: {x}px; top: {y}px; }}')
-    lines.append('}')
-    return '\n'.join(lines)
+        drone_animations.append(f'  {move_percent:.2f}% {{ left: {x}px; top: {y}px; }}')
+        drone_animations.append(f'  {hold_percent:.2f}% {{ left: {x}px; top: {y}px; }}')
+        if hub_name == network_zone.end.name:
+            drone_animations.append(f'  100% {{ left: {x}px; top: {y}px; }}')
+            break
+    drone_animations.append('}')
+    return '\n'.join(drone_animations)
 
 
 def build_drone_positions(
@@ -170,64 +226,24 @@ def generate_html(planner: RoutePlanner) -> str:
 
     hub_occupancy: dict[int, dict[str, int]] = build_hub_occupancy(planner, total_turns)
     hub_occupancy_json: str = json.dumps(hub_occupancy)
-    # TODO
+
     keyframes_css: list[str] = []
     for drone in planner.drone_list:
-        keyframes_css.append(generate_keyframes(drone.id, drone.route, network_zone.start.name, hub_positions, total_turns))
+        keyframes_css.append(generate_keyframes(
+            drone, network_zone, hub_positions, total_turns
+        ))
 
-    hub_max: dict[str, int] = {}
-    for hub in all_hubs:
-        hub_max[hub.name] = int(hub.metadata.get('max_drones', 1))
-
-    hubs_html: list[str] = []
-    for hub in all_hubs:
-        x, y = hub_positions[hub.name]
-        color_raw = str(hub.metadata.get('color', 'white')).lower()
-        color = COLOR_MAP.get(color_raw, '#eee')
-        is_rainbow_cls = ' rainbow-hub' if color_raw == 'rainbow' else ''
-        zone = hub.metadata.get('zone', 'normal')
-        if zone == 'restricted':
-            border = '3px dashed #fff'
-        elif zone == 'priority':
-            border = '3px solid #fff'
-        else:
-            border = '3px solid #555'
-        if hub == network_zone.start:
-            border = '3px solid #2ecc71'
-        elif hub == network_zone.end:
-            border = '3px solid #e74c3c'
-        max_d = hub_max[hub.name]
-        hubs_html.append(
-            f'<div class="hub{is_rainbow_cls}" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_d}">'
-            f'<span>{hub.name}</span>'
-            f'<span class="hub-occ" id="occ-{hub.name}">0/{max_d}</span></div>'
-        )
-
-    conns_html: list[str] = []
-    for conn in network_zone.connections:
-        x1, y1 = hub_positions[conn.init_hub.name]
-        x2, y2 = hub_positions[conn.final_hub.name]
-        cap = conn.metadata.get('max_link_capacity', '')
-        cap_label = f' [{cap}]' if cap else ''
-        conns_html.append(
-            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-            f'stroke="#555" stroke-width="2" stroke-dasharray="6,4"/>'
-        )
-        mid_x = (x1 + x2) // 2
-        mid_y = (y1 + y2) // 2
-        if cap_label:
-            conns_html.append(
-                f'<text x="{mid_x}" y="{mid_y - 6}" fill="#888" font-size="10" text-anchor="middle">{cap_label.strip()}</text>'
-            )
+    hubs_html: list[str] = create_html_hubs(all_hubs, network_zone, hub_positions)
+    connections_svg: list[str] = create_svg_connections(network_zone, hub_positions)
 
     drones_html: list[str] = []
     drone_anim_css: list[str] = []
     for drone in planner.drone_list:
-        dc = DRONE_COLORS[drone.id % len(DRONE_COLORS)]
-        sx, sy = hub_positions[network_zone.start.name]
+        dron_color: str = DRONE_COLORS[drone.id % len(DRONE_COLORS)]
+        start_coord_x, start_coord_y = hub_positions[network_zone.start.name]
         drones_html.append(
             f'<div class="drone" id="drone{drone.id}" '
-            f'style="left:{sx}px; top:{sy}px; background:{dc};">'
+            f'style="left:{start_coord_x}px; top:{start_coord_y}px; background:{dron_color};">'
             f'D{drone.id}</div>'
         )
         drone_anim_css.append(
@@ -236,15 +252,9 @@ def generate_html(planner: RoutePlanner) -> str:
 
     keyframes_str = '\n'.join(keyframes_css)
     drone_anim_str = '\n'.join(drone_anim_css)
-    hubs_str = '\n    '.join(hubs_html)
-    conns_str = '\n    '.join(conns_html)
-    drones_str = '\n    '.join(drones_html)
-
-    route_lines: list[str] = []
-    for drone in planner.drone_list:
-        route_str = ' -> '.join(drone.route[t] for t in sorted(drone.route.keys()))
-        route_lines.append(f'D{drone.id}: {route_str}')
-    routes_text = '\n'.join(route_lines)
+    hubs_str = '\n'.join(hubs_html)
+    conns_str = '\n'.join(connections_svg)
+    drones_str = '\n'.join(drones_html)
 
     return f'''<!DOCTYPE html>
 <html lang="en">
@@ -376,19 +386,6 @@ def generate_html(planner: RoutePlanner) -> str:
   }}
   {keyframes_str}
   {drone_anim_str}
-  .routes {{
-    margin-top: 15px;
-    background: #16213e;
-    border: 1px solid #0f3460;
-    border-radius: 8px;
-    padding: 15px 20px;
-    font-family: monospace;
-    font-size: 12px;
-    white-space: pre;
-    max-width: {map_w}px;
-    overflow-x: auto;
-    color: #aaa;
-  }}
   .rainbow-hub {{
     background-size: 200% 200% !important;
     animation: rainbowGlow 3s ease infinite;
@@ -416,7 +413,6 @@ def generate_html(planner: RoutePlanner) -> str:
     {hubs_str}
     {drones_str}
   </div>
-  <div class="routes">{routes_text}</div>
 <script>
 const dronePositions = {drone_positions_json};
 const totalTurns = {total_turns};

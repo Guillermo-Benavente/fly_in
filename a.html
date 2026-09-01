@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fly-In Visualization</title>
+</head>
+<body>
+  <h1>Fly-In Visualization</h1>
+  <div class="info">Drones: {len(planner.drone_list)} | Turns: {total_turns}</div>
+  <div class="controls">
+    <button id="modeBtn">Manual</button>
+    <button class="arrow" id="prevBtn" disabled>&#9664;</button>
+    <span class="turn-display" id="turnDisplay">Auto</span>
+    <button class="arrow" id="nextBtn" disabled>&#9654;</button>
+  </div>
+  <div class="map">
+    <svg class="connections">
+      {conns_str}
+    </svg>
+    {hubs_str}
+    {drones_str}
+  </div>
+<script>
+
+	const prevBtn = document.getElementById('prevBtn')
+	const nextBtn = document.getElementById('nextBtn')
+	const modeBtn = document.getElementById('modeBtn')
+	const turnDisplay = document.getElementById('turnDisplay')
+
+	const dronePositions = {drone_positions_json};
+	const totalTurns = {total_turns};
+	const moveTime = 500;
+	let autoMode = true;
+	let currentTurn = 0;
+	let animStart = performance.now();
+	let moving = false;
+	let occInterval = null;
+
+	const animCSS = {json.dumps({f'drone{d.id}': f'drone{d.id} {anim_duration}s linear infinite' for d in planner.drone_list})};
+	const hubOccupancy = {hub_occupancy_json};
+
+	function updateHubOccupancy(turn) {{
+	  const occ = hubOccupancy[turn] || {{}};
+	  document.querySelectorAll('.hub-occ').forEach(el => {{
+	    const max = el.parentElement.dataset.max;
+	    const count = occ[el.id.replace('occ-', '')] || 0;
+	    el.textContent = count + '/' + max;
+	  }});
+	}}
+
+	function applyTurn(turn, animate) {{
+	  if (animate && !autoMode) {{
+	    moving = true;
+	    prevBtn.disabled = true;
+	    nextBtn.disabled = true;
+	    setTimeout(() => {{ moving = false; updateButtons(); }}, moveTime);
+	  }}
+	  for (const [id, positions] of Object.entries(dronePositions)) {{
+	    const el = document.getElementById('drone' + id);
+	    if (!el) continue;
+	    const idx = Math.min(turn, positions.length - 1);
+	    const pos = positions[idx];
+	    el.style.left = pos.x + 'px';
+	    el.style.top = pos.y + 'px';
+	  }}
+	  updateHubOccupancy(turn);
+	}}
+
+	function setTurn(turn, animate) {{
+	  currentTurn = Math.max(0, Math.min(turn, totalTurns));
+	  applyTurn(currentTurn, animate);
+	  turnDisplay.textContent = 'Turn ' + currentTurn + '/' + totalTurns;
+	  updateButtons();
+	}}
+
+	function updateButtons() {{
+	  if (autoMode) return;
+	  prevBtn.disabled = moving || currentTurn <= 0;
+	  nextBtn.disabled = moving || currentTurn >= totalTurns;
+	}}
+
+	function toggleMode() {{
+	  autoMode = !autoMode;
+	  const drones = document.querySelectorAll('.drone');
+	  if (autoMode) {{
+	    modeBtn.textContent = 'Manual';
+	    modeBtn.classList.remove('active');
+	    turnDisplay.textContent = 'Auto';
+	    drones.forEach(d => {{
+	      d.style.transition = 'none';
+	      d.style.removeProperty('left');
+	      d.style.removeProperty('top');
+	      d.style.animation = 'none';
+	      d.offsetHeight;
+	      d.style.animation = animCSS[d.id];
+	      d.style.animationDelay = -(currentTurn * 1000) + 'ms';
+	    }});
+	    animStart = performance.now() - (currentTurn * 1000);
+	    prevBtn.disabled = true;
+	    nextBtn.disabled = true;
+	    if (occInterval) clearInterval(occInterval);
+	    occInterval = setInterval(() => {{
+	      const elapsed = performance.now() - animStart;
+	      const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
+	      updateHubOccupancy(t);
+	    }}, 200);
+	  }} else {{
+	    modeBtn.textContent = 'Auto';
+	    modeBtn.classList.add('active');
+	    if (occInterval) {{
+	      clearInterval(occInterval);
+	      occInterval = null;
+	    }}
+	    const elapsed = performance.now() - animStart;
+	    currentTurn = Math.floor((elapsed + 500) / 1000) % totalTurns;
+	    drones.forEach(d => {{
+	      d.style.animation = 'none';
+	      d.style.transition = `left ${moveTime}ms ease, top ${moveTime}ms ease`;
+	    }});
+	    setTurn(currentTurn, false);
+	  }}
+	}}
+
+	function prevTurn() {{
+	  if (!autoMode && !moving) setTurn(currentTurn - 1, true);
+	}}
+
+	function nextTurn() {{
+	  if (!autoMode && !moving) setTurn(currentTurn + 1, true);
+	}}
+
+	document.addEventListener('keydown', (e) => {{
+	  if (autoMode) return;
+	  if (e.key === 'ArrowLeft') {{ e.preventDefault(); prevTurn(); }}
+	  if (e.key === 'ArrowRight') {{ e.preventDefault(); nextTurn(); }}
+	}});
+
+	prevBtn.addEventListener('click', prevTurn());
+	nextBtn.addEventListener('click', nextTurn());
+	modeBtn.addEventListener('click', toggleMode());
+
+	if (autoMode) {{
+	  occInterval = setInterval(() => {{
+	    const elapsed = performance.now() - animStart;
+	    const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
+	    updateHubOccupancy(t);
+	  }}, 200);
+	}}
+</script>
+</body>
+</html>
