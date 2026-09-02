@@ -10,8 +10,7 @@ install:
 	@python3 -m venv $(VENV)
 	@echo "Install dependencies..."
 	@$(PIP) install --upgrade pip > /dev/null 2>&1
-	@$(PIP) install pydantic flake8 mypy > /dev/null 2>&1
-	@$(PIP) install -r requirements.txt
+	@$(PIP) install StrEnum flake8 mypy > /dev/null 2>&1
 	@echo "Done."
 
 run:

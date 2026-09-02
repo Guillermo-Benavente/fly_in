@@ -98,7 +98,7 @@ def create_html_hubs(
         hubs_html.append(
             f'<div class="hub{is_rainbow_cls}" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_drones}">'
             f'<span>{hub.name}</span>'
-            f'<span class="hub-occ" id="occ-{hub.name}">0/{max_drones}</span></div>'
+            f'<span class="hub-occupancy" id="occupancy-{hub.name}">0/{max_drones}</span></div>'
         )
     return hubs_html
 
@@ -171,19 +171,25 @@ def build_drone_positions(
     return result
 
 def build_hub_occupancy(planner: RoutePlanner, total_turns: int) -> dict[int, dict[str, int]]:
+    end_hub_name: str = planner.network_zone.end.name
+    total_drones: int = len(planner.drone_list)
     def get_hub(drone: Drone, turn: int) -> str | None:
         if turn == 0:
             return planner.network_zone.start.name
         action: str | None = drone.route.get(turn - 1)
         return action if action and not _isConnection(action) else None
 
-    return {
-        turn: dict(Counter(
+    result: dict[int, dict[str, int]] = {}
+
+    for turn in range(total_turns + 1):
+        counts = Counter(
             hub for drone in planner.drone_list 
             if (hub := get_hub(drone, turn)) is not None
-        ))
-        for turn in range(total_turns + 1)
-    }
+        )
+        counts[end_hub_name] += total_drones - sum(counts.values())
+        result[turn] = dict(counts)
+
+    return result
   
 def calculate_hub_screen_positions(
     all_hubs: list[Hub],
@@ -356,7 +362,7 @@ def generate_html(planner: RoutePlanner) -> str:
     overflow: hidden;
     word-break: break-all;
   }}
-  .hub-occ {{
+  .hub-occupancy {{
     position: absolute;
     top: 100%;
     left: 50%;
@@ -399,12 +405,11 @@ def generate_html(planner: RoutePlanner) -> str:
 </head>
 <body>
   <h1>Fly-In Visualization</h1>
-  <div class="info">Drones: {len(planner.drone_list)} | Turns: {total_turns}</div>
   <div class="controls">
-    <button id="modeBtn" onclick="toggleMode()">Manual</button>
-    <button class="arrow" id="prevBtn" onclick="prevTurn()" disabled>&#9664;</button>
+    <button id="modeBtn">Manual</button>
+    <button class="arrow" id="prevBtn" disabled>&#9664;</button>
     <span class="turn-display" id="turnDisplay">Auto</span>
-    <button class="arrow" id="nextBtn" onclick="nextTurn()" disabled>&#9654;</button>
+    <button class="arrow" id="nextBtn" disabled>&#9654;</button>
   </div>
   <div class="map">
     <svg class="connections">
@@ -414,121 +419,140 @@ def generate_html(planner: RoutePlanner) -> str:
     {drones_str}
   </div>
 <script>
+const Mode = Object.freeze({{
+  AUTO: 'Auto',
+  MANUAL: 'Manual'
+}});
+
+const prevBtn = document.getElementById('prevBtn')
+const nextBtn = document.getElementById('nextBtn')
+const modeBtn = document.getElementById('modeBtn')
+const turnDisplay = document.getElementById('turnDisplay')
+
 const dronePositions = {drone_positions_json};
+const hubOccupancy = {hub_occupancy_json};
 const totalTurns = {total_turns};
 const moveTime = 500;
+const animCSS = {json.dumps({f'drone{d.id}': f'drone{d.id} {anim_duration}s linear infinite' for d in planner.drone_list})};
+
 let autoMode = true;
 let currentTurn = 0;
-let animStart = performance.now();
 let moving = false;
-let occInterval = null;
+	
+let animStart = performance.now();
+let occupancyInterval = null;
 
-const animCSS = {json.dumps({f'drone{d.id}': f'drone{d.id} {anim_duration}s linear infinite' for d in planner.drone_list})};
-const hubOccupancy = {hub_occupancy_json};
+const prevTurn = () => {{ if (!autoMode && !moving) setTurn(currentTurn - 1, true); }};
+const nextTurn = () => {{ if (!autoMode && !moving) setTurn(currentTurn + 1, true); }};
 
-function updateHubOccupancy(turn) {{
-  const occ = hubOccupancy[turn] || {{}};
-  document.querySelectorAll('.hub-occ').forEach(el => {{
-    const max = el.parentElement.dataset.max;
-    const count = occ[el.id.replace('occ-', '')] || 0;
-    el.textContent = count + '/' + max;
-  }});
+prevBtn.addEventListener('click', prevTurn);
+nextBtn.addEventListener('click', nextTurn);
+modeBtn.addEventListener('click', toggleMode);
+
+document.addEventListener('keydown', (event) => {{
+  if (!autoMode) {{
+    if (event.key === 'ArrowLeft') {{ event.preventDefault(); prevTurn(); }}
+    if (event.key === 'ArrowRight') {{ event.preventDefault(); nextTurn(); }}
+  }}
+}});
+
+if (autoMode) StopOccupancyTimer(false);
+
+function toggleMode() {{
+  autoMode = !autoMode;
+  const drones = document.querySelectorAll('.drone');
+
+  if (autoMode) {{
+    modeBtn.textContent = Mode.MANUAL;
+    modeBtn.classList.remove('active');
+    turnDisplay.textContent = Mode.AUTO;
+
+    drones.forEach(drone => {{
+      drone.style.transition = 'none';
+      drone.style.removeProperty('left');
+      drone.style.removeProperty('top');
+      drone.style.animation = 'none';
+      drone.offsetHeight;
+      drone.style.animation = animCSS[drone.id];
+      drone.style.animationDelay = -(currentTurn * 1000) + 'ms';
+    }});
+
+    animStart = performance.now() - (currentTurn * 1000);
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    StopOccupancyTimer(false);
+
+  }} else {{
+    modeBtn.textContent = Mode.AUTO;
+    modeBtn.classList.add('active');
+    StopOccupancyTimer(true);
+
+    currentTurn = updateCurrentTurn();
+
+    drones.forEach(d => {{
+      d.style.animation = 'none';
+      d.style.transition = `left ${{moveTime}}ms ease, top ${{moveTime}}ms ease`;
+    }});
+
+    setTurn(currentTurn, false);
+  }}
 }}
 
-function applyTurn(turn, animate) {{
-  if (animate && !autoMode) {{
-    moving = true;
-    document.getElementById('prevBtn').disabled = true;
-    document.getElementById('nextBtn').disabled = true;
-    setTimeout(() => {{ moving = false; updateButtons(); }}, moveTime);
-  }}
-  for (const [id, positions] of Object.entries(dronePositions)) {{
-    const el = document.getElementById('drone' + id);
-    if (!el) continue;
-    const idx = Math.min(turn, positions.length - 1);
-    const pos = positions[idx];
-    el.style.left = pos.x + 'px';
-    el.style.top = pos.y + 'px';
-  }}
-  updateHubOccupancy(turn);
+function StopOccupancyTimer(isStoped) {{
+  if (occupancyInterval) clearInterval(occupancyInterval);
+  if (isStoped) occupancyInterval = null;
+  else occupancyInterval = setInterval(
+    () => {{updateHubOccupancy(updateCurrentTurn())}}
+    ,200
+  );
+}}
+
+function updateCurrentTurn() {{
+  const time_elapsed = performance.now() - animStart;
+  return Math.floor((time_elapsed + 500) / 1000) % totalTurns;
 }}
 
 function setTurn(turn, animate) {{
   currentTurn = Math.max(0, Math.min(turn, totalTurns));
   applyTurn(currentTurn, animate);
-  document.getElementById('turnDisplay').textContent = 'Turn ' + currentTurn + '/' + totalTurns;
+  turnDisplay.textContent = `Turn ${{currentTurn}}/${{totalTurns}}`;
   updateButtons();
 }}
 
-function updateButtons() {{
-  if (autoMode) return;
-  document.getElementById('prevBtn').disabled = moving || currentTurn <= 0;
-  document.getElementById('nextBtn').disabled = moving || currentTurn >= totalTurns;
+function applyTurn(turn, animate) {{
+  if (animate && !autoMode) {{
+    moving = true;
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    setTimeout(() => {{ moving = false; updateButtons(); }}, moveTime);
+  }}
+
+  for (const [id, positions] of Object.entries(dronePositions)) {{
+    const drone = document.getElementById('drone' + id);
+    if (drone) {{
+      const index = Math.min(turn, positions.length - 1);
+	    const position = positions[index];
+	    drone.style.left = position.x + 'px';
+	    drone.style.top = position.y + 'px';
+    }}
+  }}
+  updateHubOccupancy(turn);
 }}
 
-function toggleMode() {{
-  autoMode = !autoMode;
-  const btn = document.getElementById('modeBtn');
-  const drones = document.querySelectorAll('.drone');
-  if (autoMode) {{
-    btn.textContent = 'Manual';
-    btn.classList.remove('active');
-    document.getElementById('turnDisplay').textContent = 'Auto';
-    drones.forEach(d => {{
-      d.style.transition = 'none';
-      d.style.removeProperty('left');
-      d.style.removeProperty('top');
-      d.style.animation = 'none';
-      d.offsetHeight;
-      d.style.animation = animCSS[d.id];
-      d.style.animationDelay = -(currentTurn * 1000) + 'ms';
-    }});
-    animStart = performance.now() - (currentTurn * 1000);
-    document.getElementById('prevBtn').disabled = true;
-    document.getElementById('nextBtn').disabled = true;
-    if (occInterval) clearInterval(occInterval);
-    occInterval = setInterval(() => {{
-      const elapsed = performance.now() - animStart;
-      const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
-      updateHubOccupancy(t);
-    }}, 200);
-  }} else {{
-    btn.textContent = 'Auto';
-    btn.classList.add('active');
-    if (occInterval) {{
-      clearInterval(occInterval);
-      occInterval = null;
-    }}
-    const elapsed = performance.now() - animStart;
-    currentTurn = Math.floor((elapsed + 500) / 1000) % totalTurns;
-    drones.forEach(d => {{
-      d.style.animation = 'none';
-      d.style.transition = 'left ' + moveTime + 'ms ease, top ' + moveTime + 'ms ease';
-    }});
-    setTurn(currentTurn, false);
+function updateButtons() {{
+  if (!autoMode) {{
+    prevBtn.disabled = moving || currentTurn <= 0;
+    nextBtn.disabled = moving || currentTurn >= totalTurns;
   }}
 }}
 
-function prevTurn() {{
-  if (!autoMode && !moving) setTurn(currentTurn - 1, true);
-}}
-
-function nextTurn() {{
-  if (!autoMode && !moving) setTurn(currentTurn + 1, true);
-}}
-
-document.addEventListener('keydown', (e) => {{
-  if (autoMode) return;
-  if (e.key === 'ArrowLeft') {{ e.preventDefault(); prevTurn(); }}
-  if (e.key === 'ArrowRight') {{ e.preventDefault(); nextTurn(); }}
-}});
-
-if (autoMode) {{
-  occInterval = setInterval(() => {{
-    const elapsed = performance.now() - animStart;
-    const t = Math.floor((elapsed + 500) / 1000) % totalTurns;
-    updateHubOccupancy(t);
-  }}, 200);
+function updateHubOccupancy(turn) {{
+  const occupancy = hubOccupancy[turn] || {{}};
+  document.querySelectorAll('.hub-occupancy').forEach(hub_occupancy => {{
+    const max_drones = hub_occupancy.parentElement.dataset.max;
+    const drones_in_hub = occupancy[hub_occupancy.id.replace('occupancy-', '')] || 0;
+    hub_occupancy.textContent = `${{drones_in_hub}}/${{max_drones}}`;
+  }});
 }}
 </script>
 </body>
