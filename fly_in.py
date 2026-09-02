@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Main entry point and interactive test runner for the drone routing planner.
+
+Provides CLI functionality to run single map evaluations, execute automated
+test suites across preset benchmark maps, and launch an interactive
+terminal menu.
+"""
 import sys
 from hub import TypeConsoleColor as TCC
 from network_zone import NetworkZone
@@ -8,6 +14,7 @@ from strenum import StrEnum
 
 
 class TypeMap(StrEnum):
+    """Enumeration of preset benchmark map file paths."""
     EASY_01 = 'easy/01_linear_path'
     EASY_02 = 'easy/02_simple_fork'
     EASY_03 = 'easy/03_basic_capacity'
@@ -21,6 +28,11 @@ class TypeMap(StrEnum):
 
 
 def test_maps() -> None:
+    """Executes route planning test suite over all predefined maps.
+
+    Evaluates whether all drones successfully reach the destination hub and
+    compares total simulation turns against benchmark targets.
+    """
     targets: dict[str, int] = {
         TypeMap.EASY_01: 6,
         TypeMap.EASY_02: 8,
@@ -35,20 +47,37 @@ def test_maps() -> None:
     }
     passed: int = 0
     failed: int = 0
-    for path in [map for map in TypeMap]:
+    for path in TypeMap.__members__.values():
         try:
             map_data: NetworkZone = Parser(f'./maps/{path}.txt').parser()
             planner = RoutePlanner(map_data)
-            ok: bool = all(drone.current_zone == map_data.end for drone in planner.drone_list)
-            turns: int = max((max(drone.route.keys()) + 1) for drone in planner.drone_list)
+            ok: bool = all(
+                drone.current_zone == map_data.end
+                for drone
+                in planner.drone_list
+            )
+            turns: int = max(
+                (max(drone.route.keys()) + 1)
+                for drone
+                in planner.drone_list
+            )
             target: int = targets.get(path, 0)
-            perf: str = f'{TCC.LIME}PASS{TCC.RESET}' if turns <= target else f'{TCC.RED}OVER{TCC.RESET}'
+            if turns <= target:
+                perf: str = f'{TCC.LIME}PASS{TCC.RESET}'
+            else:
+                perf = f'{TCC.RED}OVER{TCC.RESET}'
             if ok:
                 passed += 1
-                print(f'OK   {perf} | {path}: {len(planner.drone_list)} drones, {turns} turns (target: {target})')
+                print(
+                    f'OK   {perf} | {path}: {len(planner.drone_list)} '
+                    f'drones, {turns} turns (target: {target})'
+                )
             else:
                 failed += 1
-                print(f'FAIL      | {path}: {len(planner.drone_list)} drones, {turns} turns — not all drones reached the end')
+                print(
+                    f'FAIL      | {path}: {len(planner.drone_list)} drones, '
+                    f'{turns} turns — not all drones reached the end'
+                )
         except Exception as e:
             failed += 1
             print(f'FAIL      | {path}: {type(e).__name__} — {e}')
@@ -56,9 +85,13 @@ def test_maps() -> None:
 
 
 def print_options() -> None:
+    """Displays formatted color-coded CLI legend and menu options."""
     print(TCC.CYAN)
     print('+----------Legend----------+')
-    print(f'|  {TCC.GREEN}EASY {TCC.YELLOW}MEDIUM {TCC.RED}HARD {TCC.ORANGE}EXTRA  {TCC.CYAN}|')
+    print(
+        f'|  {TCC.GREEN}EASY {TCC.YELLOW}MEDIUM '
+        f'{TCC.RED}HARD {TCC.ORANGE}EXTRA  {TCC.CYAN}|'
+    )
     print('+----Select your option----+')
     print(f'| {TCC.PURPLE}1: {TCC.GREEN}linear_path           {TCC.CYAN}|')
     print(f'| {TCC.PURPLE}2: {TCC.GREEN}simple_fork           {TCC.CYAN}|')
@@ -76,7 +109,13 @@ def print_options() -> None:
 
 
 def run_interactive_menu() -> None:
-    map_options: dict[str, TypeMap] = {str(i): map_enum for i, map_enum in enumerate(TypeMap, start=1)}
+    """Runs interactive CLI loop for selecting, parsing,
+    and executing map simulations."""
+    map_options: dict[str, TypeMap] = {
+        str(i): map_enum
+        for i, map_enum
+        in enumerate(TypeMap, start=1)
+    }
 
     while True:
         test_maps()
@@ -87,26 +126,41 @@ def run_interactive_menu() -> None:
         if map_select in map_options:
             selected_path = map_options[map_select]
             try:
-                network_map: NetworkZone = Parser(f'./maps/{selected_path}.txt').parser()
+                network_map: NetworkZone = Parser(
+                    f'./maps/{selected_path}.txt'
+                ).parser()
                 planner = RoutePlanner(network_map)
                 print(f'\n--- Output para {selected_path} ---')
                 print(planner.output())
             except Exception as e:
                 print(f'{TCC.RED}Error processing the map: {e}{TCC.RESET}')
-            input(f'\n{TCC.YELLOW}Press Enter to return to the menu...{TCC.RESET}')
+            input(
+                f'\n{TCC.YELLOW}Press Enter to return '
+                f'to the menu...{TCC.RESET}'
+            )
         else:
-            print(f'\n{TCC.RED}Invalid option. Please enter a number between 1 and {len(map_options)} or "q" to exit.{TCC.RESET}')
+            print(
+                f'\n{TCC.RED}Invalid option. Please enter a number between 1'
+                f'and {len(map_options)} or "q" to exit.{TCC.RESET}'
+            )
             input(f'{TCC.YELLOW}Press Enter to try again...{TCC.RESET}')
 
 
 def run_single_map(map_path: str) -> None:
+    """Parses and runs route planning for a single given map file.
+
+    Args:
+        map_path (str): File system path to the target map text file.
+    """
     network_map: NetworkZone = Parser(map_path).parser()
     planner = RoutePlanner(network_map)
     print(planner.output())
 
 
 def main() -> None:
-    if len(sys.argv) == 2 and sys.argv[1] != '--interactive':
+    """Parses command-line arguments and routes execution to single mode
+    or interactive CLI."""
+    if len(sys.argv) == 2:
         try:
             run_single_map(sys.argv[1])
         except Exception as e:

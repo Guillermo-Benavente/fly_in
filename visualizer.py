@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Module for rendering network route animations into interactive HTML pages.
+
+Parses network configuration files, computes drone flight routes, and builds
+a standalone HTML/CSS/JS web application to visualize drone navigation, hub
+occupancy, and custom node styling.
+"""
 import sys
 import json
 import os
@@ -31,12 +37,28 @@ DRONE_COLORS: list[str] = [
 
 
 def _isConnection(name: str) -> bool:
+    """Checks whether a given location string represents a connection path.
+
+    Args:
+      name (str): The node or connection identifier.
+
+    Returns:
+      bool: True if the name contains a hyphen indicating a connection, False otherwise.
+    """
     if '-' in name:
         return True
     else:
         return False
 
 def _get_connection_hubs(name: str) -> tuple[str, str] | None:
+    """Extracts endpoint hub names from a connection string identifier.
+
+    Args:
+      name (str): Formatted connection string (e.g., 'hubA-hubB').
+
+    Returns:
+      tuple[str, str] | None: A tuple of (init_hub, final_hub) if valid, otherwise None.
+    """
     if _isConnection(name):
         parts = name.split('-')
         if len(parts) == 2:
@@ -44,6 +66,16 @@ def _get_connection_hubs(name: str) -> tuple[str, str] | None:
     return None
 
 def _connection_coords(hub_a: str, hub_b: str, hub_positions: dict[str, tuple[int, int]]) -> tuple[int, int]:
+    """Calculates midpoint coordinates between two connected hubs.
+
+    Args:
+      hub_a (str): Name of the first hub.
+      hub_b (str): Name of the second hub.
+      hub_positions (dict[str, tuple[int, int]]): Screen coordinates mapping for hubs.
+
+    Returns:
+      tuple[int, int]: Midpoint pixel coordinates (X, Y).
+    """
     x1, y1 = hub_positions[hub_a]
     x2, y2 = hub_positions[hub_b]
     return (x1 + x2) // 2, (y1 + y2) // 2
@@ -52,6 +84,15 @@ def create_svg_connections(
     network_zone: NetworkZone,
     hub_positions: dict[str, tuple[int, int]]
 ) -> list[str]:
+    """Generates SVG line elements representing connection pathways between hubs.
+
+    Args:
+        network_zone (NetworkZone): Network graph model containing connection definitions.
+        hub_positions (dict[str, tuple[int, int]]): Pixel positions of all hubs.
+
+    Returns:
+        list[str]: SVG markup strings for connection lines and capacity labels.
+    """
     connections_svg: list[str] = []
     for connection in network_zone.connections:
         init_conn_x, init_conn_y = hub_positions[connection.init_hub.name]
@@ -77,19 +118,29 @@ def create_html_hubs(
     network_zone: NetworkZone,
     hub_positions: dict[str, tuple[int, int]]
 ) -> list[str]:
+    """Generates styled HTML div elements representing hubs on the visualization map.
+
+    Args:
+        all_hubs (list[Hub]): Collection of all hubs to render.
+        network_zone (NetworkZone): Network topology containing start and end hubs.
+        hub_positions (dict[str, tuple[int, int]]): Pixel placement map for each hub.
+
+    Returns:
+        list[str]: Formatted HTML div strings for hub elements.
+    """
     hubs_html: list[str] = []
     for hub in all_hubs:
         x, y = hub_positions[hub.name]
         color_raw: str = str(hub.metadata.get(TMHub.COLOR, 'white')).lower()
-        color: str = COLOR_MAP.get(color_raw)
+        color: str | None = COLOR_MAP.get(color_raw)
         is_rainbow_cls: str = ' rainbow-hub' if color_raw == 'rainbow' else ''
         zone_hub: str = hub.metadata.get(TMHub.ZONE, TypeZone.NORMAL)
         if hub == network_zone.start:
-            border = '3px solid #2ecc71'
+            border: str = '3px solid #2ecc71'
         elif hub == network_zone.end:
             border = '3px solid #e74c3c'
         elif zone_hub == TypeZone.RESTRICTED:
-            border: str = '3px dashed #fff'
+            border = '3px dashed #fff'
         elif zone_hub == TypeZone.PRIORITY:
             border = '3px solid #fff'
         else:
@@ -108,6 +159,17 @@ def generate_keyframes(
     hub_positions: dict[str, tuple[int, int]],
     total_turns: int
 ) -> str:
+    """Generates CSS keyframe animations representing step-by-step drone movement.
+
+    Args:
+        drone (Drone): Drone instance whose path will be translated into keyframes.
+        network_zone (NetworkZone): Topology model containing origin and destination info.
+        hub_positions (dict[str, tuple[int, int]]): Pixel coordinates mapping for hubs.
+        total_turns (int): Total simulation turns used to normalize animation timing.
+
+    Returns:
+        str: CSS @keyframes string defining movement timeline for the drone.
+    """
     positions: list[str] = []
     current_hub_name: str = network_zone.start.name
     hub_restricted_positions: dict[int, tuple[int, int]] = {}
@@ -145,6 +207,16 @@ def build_drone_positions(
     hub_positions: dict[str, tuple[int, int]], 
     total_turns: int
 ) -> dict[int, list[dict[str, int]]]:
+    """Builds a turn-by-turn map of pixel coordinates for all drones in manual step mode.
+
+    Args:
+        planner (RoutePlanner): Route planner containing executed drone paths.
+        hub_positions (dict[str, tuple[int, int]]): Pixel placement map for hubs.
+        total_turns (int): Total simulation turns.
+
+    Returns:
+        dict[int, list[dict[str, int]]]: Dict mapping drone IDs to lists of coordinate dicts ({'x': x, 'y': y}).
+    """
     start_hub_name: str = planner.network_zone.start.name
     start_coord_x, start_coord_y = hub_positions[start_hub_name]
     result: dict[int, list[dict[str, int]]] = {}
@@ -171,6 +243,15 @@ def build_drone_positions(
     return result
 
 def build_hub_occupancy(planner: RoutePlanner, total_turns: int) -> dict[int, dict[str, int]]:
+    """Calculates drone occupancy counts per hub for each turn step.
+
+    Args:
+        planner (RoutePlanner): Route planner containing drone flight data.
+        total_turns (int): Total simulation turns.
+
+    Returns:
+        dict[int, dict[str, int]]: Mapping of turn index to hub occupancy counts.
+    """
     end_hub_name: str = planner.network_zone.end.name
     total_drones: int = len(planner.drone_list)
     def get_hub(drone: Drone, turn: int) -> str | None:
@@ -198,6 +279,18 @@ def calculate_hub_screen_positions(
     node_distance_px: int,
     padding_px: int
 ) -> dict[str, tuple[int, int]]:
+    """Maps relative grid coordinates of hubs into absolute screen pixel coordinates.
+
+    Args:
+        all_hubs (list[Hub]): List of hubs to scale and position.
+        min_x (int): Minimum X grid coordinate across all hubs.
+        min_y (int): Minimum Y grid coordinate across all hubs.
+        node_distance_px (int): Pixel distance multiplier per grid unit.
+        padding_px (int): Canvas edge padding in pixels.
+
+    Returns:
+        dict[str, tuple[int, int]]: Dictionary mapping hub names to (X, Y) pixel pairs.
+    """
     screen_positions: dict[str, tuple[int, int]] = {}
     for hub in all_hubs:
         px: int = (hub.coord_x - min_x) * node_distance_px + padding_px
@@ -206,6 +299,14 @@ def calculate_hub_screen_positions(
     return screen_positions
 
 def generate_html(planner: RoutePlanner) -> str:
+    """Assembles full HTML, CSS, and JS components into an interactive visualizer web page.
+
+    Args:
+        planner (RoutePlanner): Route planner containing simulation state.
+
+    Returns:
+        str: Fully rendered standalone HTML document content.
+    """
     network_zone: NetworkZone = planner.network_zone
     all_hubs: list[Hub] = network_zone.all_hubs()
 
@@ -559,7 +660,12 @@ function updateHubOccupancy(turn) {{
 </html>'''
 
 
-def main():
+def main() -> None:
+    """Main CLI entry point for visualizer execution.
+
+    Parses command-line arguments, loads network layout configuration, executes route planning,
+    and writes rendered visualization HTML to the requested file path.
+    """
     if len(sys.argv) < 2 or len(sys.argv) > 3:
         print('Usage: python visualizer.py <map_file> [output_file]')
         print('Example: python visualizer.py maps/easy/01_linear_path.txt output.html')
