@@ -23,7 +23,13 @@ COLOR_MAP: dict[str, str] = {
     'purple': '#9b59b6', 'brown': '#795548', 'maroon': '#800000',
     'gold': '#ffd700', 'lime': '#cddc39', 'crimson': '#dc143c',
     'violet': '#7c4dff', 'darkred': '#b71c1c',
-    'rainbow': 'linear-gradient(135deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)',
+    'rainbow': (
+        '''linear-gradient(
+            135deg, #ff0000, #ff7f00,
+            #ffff00, #00ff00, #0000ff,
+            #4b0082, #8b00ff
+        )'''
+    ),
 }
 
 
@@ -43,12 +49,14 @@ def _isConnection(name: str) -> bool:
       name (str): The node or connection identifier.
 
     Returns:
-      bool: True if the name contains a hyphen indicating a connection, False otherwise.
+      bool: True if the name contains a hyphen indicating a connection,
+        False otherwise.
     """
     if '-' in name:
         return True
     else:
         return False
+
 
 def _get_connection_hubs(name: str) -> tuple[str, str] | None:
     """Extracts endpoint hub names from a connection string identifier.
@@ -57,7 +65,8 @@ def _get_connection_hubs(name: str) -> tuple[str, str] | None:
       name (str): Formatted connection string (e.g., 'hubA-hubB').
 
     Returns:
-      tuple[str, str] | None: A tuple of (init_hub, final_hub) if valid, otherwise None.
+      tuple[str, str] | None:
+        A tuple of (init_hub, final_hub) if valid, otherwise None.
     """
     if _isConnection(name):
         parts = name.split('-')
@@ -65,13 +74,19 @@ def _get_connection_hubs(name: str) -> tuple[str, str] | None:
             return parts[0], parts[1]
     return None
 
-def _connection_coords(hub_a: str, hub_b: str, hub_positions: dict[str, tuple[int, int]]) -> tuple[int, int]:
+
+def _connection_coords(
+        hub_a: str,
+        hub_b: str,
+        hub_positions: dict[str, tuple[int, int]]
+) -> tuple[int, int]:
     """Calculates midpoint coordinates between two connected hubs.
 
     Args:
       hub_a (str): Name of the first hub.
       hub_b (str): Name of the second hub.
-      hub_positions (dict[str, tuple[int, int]]): Screen coordinates mapping for hubs.
+      hub_positions (dict[str, tuple[int, int]]):
+        Screen coordinates mapping for hubs.
 
     Returns:
       tuple[int, int]: Midpoint pixel coordinates (X, Y).
@@ -80,15 +95,19 @@ def _connection_coords(hub_a: str, hub_b: str, hub_positions: dict[str, tuple[in
     x2, y2 = hub_positions[hub_b]
     return (x1 + x2) // 2, (y1 + y2) // 2
 
+
 def create_svg_connections(
     network_zone: NetworkZone,
     hub_positions: dict[str, tuple[int, int]]
 ) -> list[str]:
-    """Generates SVG line elements representing connection pathways between hubs.
+    """Generates SVG line elements representing
+    connection pathways between hubs.
 
     Args:
-        network_zone (NetworkZone): Network graph model containing connection definitions.
-        hub_positions (dict[str, tuple[int, int]]): Pixel positions of all hubs.
+        network_zone (NetworkZone):
+            Network graph model containing connection definitions.
+        hub_positions (dict[str, tuple[int, int]]):
+            Pixel positions of all hubs.
 
     Returns:
         list[str]: SVG markup strings for connection lines and capacity labels.
@@ -97,33 +116,43 @@ def create_svg_connections(
     for connection in network_zone.connections:
         init_conn_x, init_conn_y = hub_positions[connection.init_hub.name]
         final_conn_x, final_conn_y = hub_positions[connection.final_hub.name]
-        capacity_link: int = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
-        capacity_label: str = f' [{capacity_link}]' if capacity_link > 1 else ''
+        capacity_link: int = int(
+            connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1)
+        )
+        capacity_label: str = (
+            f' [{capacity_link}]' if capacity_link > 1 else ''
+        )
         connections_svg.append(
-            f'<line x1="{init_conn_x}" y1="{init_conn_y}" x2="{final_conn_x}" y2="{final_conn_y}" '
-            f'stroke="#555" stroke-width="2" stroke-dasharray="6,4"/>'
+            f'''<line x1="{init_conn_x}" y1="{init_conn_y}"
+                x2="{final_conn_x}" y2="{final_conn_y}"
+                stroke="#555" stroke-width="2" stroke-dasharray="6,4"/>'''
         )
         mid_x = (init_conn_x + final_conn_x) // 2
         mid_y = (init_conn_y + final_conn_y) // 2
         if capacity_label:
             connections_svg.append(
-                f'<text x="{mid_x}" y="{mid_y - 6}" fill="#888" font-size="10" text-anchor="middle">'
-                f'  {capacity_label.strip()}'
-                '</text>'
+                f'''<text x="{mid_x}" y="{mid_y - 6}"
+                fill="#888" font-size="10" text-anchor="middle">
+                  {capacity_label.strip()}
+                </text>'''
             )
     return connections_svg
+
 
 def create_html_hubs(
     all_hubs: list[Hub],
     network_zone: NetworkZone,
     hub_positions: dict[str, tuple[int, int]]
 ) -> list[str]:
-    """Generates styled HTML div elements representing hubs on the visualization map.
+    """Generates styled HTML div elements representing hubs
+    on the visualization map.
 
     Args:
         all_hubs (list[Hub]): Collection of all hubs to render.
-        network_zone (NetworkZone): Network topology containing start and end hubs.
-        hub_positions (dict[str, tuple[int, int]]): Pixel placement map for each hub.
+        network_zone (NetworkZone):
+            Network topology containing start and end hubs.
+        hub_positions (dict[str, tuple[int, int]]):
+            Pixel placement map for each hub.
 
     Returns:
         list[str]: Formatted HTML div strings for hub elements.
@@ -147,11 +176,17 @@ def create_html_hubs(
             border = '3px solid #555'
         max_drones: int = int(hub.metadata.get(TMHub.MAX_DRONES, 1))
         hubs_html.append(
-            f'<div class="hub{is_rainbow_cls}" style="left:{x}px; top:{y}px; background:{color}; border:{border};" data-max="{max_drones}">'
-            f'<span>{hub.name}</span>'
-            f'<span class="hub-occupancy" id="occupancy-{hub.name}">0/{max_drones}</span></div>'
+            f'''<div class="hub{is_rainbow_cls}"
+                    style="left:{x}px; top:{y}px; background:{color};
+                    border:{border};" data-max="{max_drones}">
+                <span>{hub.name}</span>
+                <span class="hub-occupancy" id="occupancy-{hub.name}">
+                    0/{max_drones}
+                </span>
+            </div>'''
         )
     return hubs_html
+
 
 def generate_keyframes(
     drone: Drone,
@@ -159,13 +194,18 @@ def generate_keyframes(
     hub_positions: dict[str, tuple[int, int]],
     total_turns: int
 ) -> str:
-    """Generates CSS keyframe animations representing step-by-step drone movement.
+    """Generates CSS keyframe animations representing
+    step-by-step drone movement.
 
     Args:
-        drone (Drone): Drone instance whose path will be translated into keyframes.
-        network_zone (NetworkZone): Topology model containing origin and destination info.
-        hub_positions (dict[str, tuple[int, int]]): Pixel coordinates mapping for hubs.
-        total_turns (int): Total simulation turns used to normalize animation timing.
+        drone (Drone):
+            Drone instance whose path will be translated into keyframes.
+        network_zone (NetworkZone):
+            Topology model containing origin and destination info.
+        hub_positions (dict[str, tuple[int, int]]):
+            Pixel coordinates mapping for hubs.
+        total_turns (int):
+            Total simulation turns used to normalize animation timing.
 
     Returns:
         str: CSS @keyframes string defining movement timeline for the drone.
@@ -179,13 +219,17 @@ def generate_keyframes(
             connection_hubs = _get_connection_hubs(position_name)
             if connection_hubs:
                 init_hub, final_hub = connection_hubs
-                hub_restricted_positions[turn] = _connection_coords(init_hub, final_hub, hub_positions)
+                hub_restricted_positions[turn] = _connection_coords(
+                    init_hub, final_hub, hub_positions
+                )
             else:
                 current_hub_name = position_name
         positions.append(current_hub_name)
     drone_animations: list[str] = [f'@keyframes drone{drone.id} {{']
     start_coord_x, start_coord_y = hub_positions[network_zone.start.name]
-    drone_animations.append(f'  0% {{ left: {start_coord_x}px; top: {start_coord_y}px; }}')
+    drone_animations.append(
+        f'  0% {{ left: {start_coord_x}px; top: {start_coord_y}px; }}'
+    )
     for turn, hub_name in enumerate(positions):
         move_percent = ((turn + 0.5) / total_turns) * 100
         hold_percent = ((turn + 1) / total_turns) * 100
@@ -193,8 +237,12 @@ def generate_keyframes(
             x, y = hub_restricted_positions[turn]
         else:
             x, y = hub_positions[hub_name]
-        drone_animations.append(f'  {move_percent:.2f}% {{ left: {x}px; top: {y}px; }}')
-        drone_animations.append(f'  {hold_percent:.2f}% {{ left: {x}px; top: {y}px; }}')
+        drone_animations.append(
+            f'  {move_percent:.2f}% {{ left: {x}px; top: {y}px; }}'
+        )
+        drone_animations.append(
+            f'  {hold_percent:.2f}% {{ left: {x}px; top: {y}px; }}'
+        )
         if hub_name == network_zone.end.name:
             drone_animations.append(f'  100% {{ left: {x}px; top: {y}px; }}')
             break
@@ -203,26 +251,32 @@ def generate_keyframes(
 
 
 def build_drone_positions(
-    planner: RoutePlanner, 
-    hub_positions: dict[str, tuple[int, int]], 
+    planner: RoutePlanner,
+    hub_positions: dict[str, tuple[int, int]],
     total_turns: int
 ) -> dict[int, list[dict[str, int]]]:
-    """Builds a turn-by-turn map of pixel coordinates for all drones in manual step mode.
+    """Builds a turn-by-turn map of pixel coordinates
+    for all drones in manual step mode.
 
     Args:
         planner (RoutePlanner): Route planner containing executed drone paths.
-        hub_positions (dict[str, tuple[int, int]]): Pixel placement map for hubs.
+        hub_positions (dict[str, tuple[int, int]]):
+            Pixel placement map for hubs.
         total_turns (int): Total simulation turns.
 
     Returns:
-        dict[int, list[dict[str, int]]]: Dict mapping drone IDs to lists of coordinate dicts ({'x': x, 'y': y}).
+        dict[int, list[dict[str, int]]]:
+            Dict mapping drone IDs to lists of coordinate dicts
+            ({'x': x, 'y': y}).
     """
     start_hub_name: str = planner.network_zone.start.name
     start_coord_x, start_coord_y = hub_positions[start_hub_name]
     result: dict[int, list[dict[str, int]]] = {}
 
     for drone in planner.drone_list:
-        drone_positions: list[dict[str, int]] = [{'x': start_coord_x, 'y': start_coord_y}]
+        drone_positions: list[dict[str, int]] = [
+            {'x': start_coord_x, 'y': start_coord_y}
+        ]
         current_hub_name: str = start_hub_name
 
         for turn in range(total_turns):
@@ -242,7 +296,11 @@ def build_drone_positions(
 
     return result
 
-def build_hub_occupancy(planner: RoutePlanner, total_turns: int) -> dict[int, dict[str, int]]:
+
+def build_hub_occupancy(
+    planner: RoutePlanner,
+    total_turns: int
+) -> dict[int, dict[str, int]]:
     """Calculates drone occupancy counts per hub for each turn step.
 
     Args:
@@ -250,10 +308,12 @@ def build_hub_occupancy(planner: RoutePlanner, total_turns: int) -> dict[int, di
         total_turns (int): Total simulation turns.
 
     Returns:
-        dict[int, dict[str, int]]: Mapping of turn index to hub occupancy counts.
+        dict[int, dict[str, int]]:
+            Mapping of turn index to hub occupancy counts.
     """
     end_hub_name: str = planner.network_zone.end.name
     total_drones: int = len(planner.drone_list)
+
     def get_hub(drone: Drone, turn: int) -> str | None:
         if turn == 0:
             return planner.network_zone.start.name
@@ -264,14 +324,15 @@ def build_hub_occupancy(planner: RoutePlanner, total_turns: int) -> dict[int, di
 
     for turn in range(total_turns + 1):
         counts = Counter(
-            hub for drone in planner.drone_list 
+            hub for drone in planner.drone_list
             if (hub := get_hub(drone, turn)) is not None
         )
         counts[end_hub_name] += total_drones - sum(counts.values())
         result[turn] = dict(counts)
 
     return result
-  
+
+
 def calculate_hub_screen_positions(
     all_hubs: list[Hub],
     min_x: int,
@@ -279,7 +340,8 @@ def calculate_hub_screen_positions(
     node_distance_px: int,
     padding_px: int
 ) -> dict[str, tuple[int, int]]:
-    """Maps relative grid coordinates of hubs into absolute screen pixel coordinates.
+    """Maps relative grid coordinates of hubs
+    into absolute screen pixel coordinates.
 
     Args:
         all_hubs (list[Hub]): List of hubs to scale and position.
@@ -289,7 +351,8 @@ def calculate_hub_screen_positions(
         padding_px (int): Canvas edge padding in pixels.
 
     Returns:
-        dict[str, tuple[int, int]]: Dictionary mapping hub names to (X, Y) pixel pairs.
+        dict[str, tuple[int, int]]:
+            Dictionary mapping hub names to (X, Y) pixel pairs.
     """
     screen_positions: dict[str, tuple[int, int]] = {}
     for hub in all_hubs:
@@ -298,8 +361,10 @@ def calculate_hub_screen_positions(
         screen_positions[hub.name] = (px, py)
     return screen_positions
 
+
 def generate_html(planner: RoutePlanner) -> str:
-    """Assembles full HTML, CSS, and JS components into an interactive visualizer web page.
+    """Assembles full HTML, CSS, and JS components into
+    an interactive visualizer web page.
 
     Args:
         planner (RoutePlanner): Route planner containing simulation state.
@@ -310,28 +375,42 @@ def generate_html(planner: RoutePlanner) -> str:
     network_zone: NetworkZone = planner.network_zone
     all_hubs: list[Hub] = network_zone.all_hubs()
 
-    min_coord_x: int = min(h.coord_x for h in all_hubs)
-    max_coord_x: int = max(h.coord_x for h in all_hubs)
-    min_coord_y: int = min(h.coord_y for h in all_hubs)
-    max_coord_y: int = max(h.coord_y for h in all_hubs)
+    min_coord_x: int = min(hub.coord_x for hub in all_hubs)
+    max_coord_x: int = max(hub.coord_x for hub in all_hubs)
+    min_coord_y: int = min(hub.coord_y for hub in all_hubs)
+    max_coord_y: int = max(hub.coord_y for hub in all_hubs)
 
     node_distance_px: int = 100
     padding_px: int = 40
-    map_w: int = (max_coord_x - min_coord_x) * node_distance_px + padding_px * 2
-    map_h: int = (max_coord_y - min_coord_y) * node_distance_px + padding_px * 2
+    map_w: int = (
+        (max_coord_x - min_coord_x) *
+        node_distance_px + padding_px * 2
+    )
+    map_h: int = (
+        (max_coord_y - min_coord_y) *
+        node_distance_px + padding_px * 2
+    )
 
     hub_positions: dict[str, tuple[int, int]] = calculate_hub_screen_positions(
         all_hubs, min_coord_x, min_coord_y, node_distance_px, padding_px
     )
 
-    total_turns: int = max((max(d.route.keys()) + 1) for d in planner.drone_list) if planner.drone_list else 1
+    total_turns: int = max(
+        (max(drone.route.keys()) + 1)
+        for drone
+        in planner.drone_list
+    ) if planner.drone_list else 1
     turn_duration: int = 1
     anim_duration: int = total_turns * turn_duration
 
-    drone_positions: dict[int, list[dict[str, int]]] = build_drone_positions(planner, hub_positions, total_turns)
+    drone_positions: dict[int, list[dict[str, int]]] = build_drone_positions(
+        planner, hub_positions, total_turns
+    )
     drone_positions_json: str = json.dumps(drone_positions)
 
-    hub_occupancy: dict[int, dict[str, int]] = build_hub_occupancy(planner, total_turns)
+    hub_occupancy: dict[int, dict[str, int]] = build_hub_occupancy(
+        planner, total_turns
+    )
     hub_occupancy_json: str = json.dumps(hub_occupancy)
 
     keyframes_css: list[str] = []
@@ -340,8 +419,12 @@ def generate_html(planner: RoutePlanner) -> str:
             drone, network_zone, hub_positions, total_turns
         ))
 
-    hubs_html: list[str] = create_html_hubs(all_hubs, network_zone, hub_positions)
-    connections_svg: list[str] = create_svg_connections(network_zone, hub_positions)
+    hubs_html: list[str] = create_html_hubs(
+        all_hubs, network_zone, hub_positions
+    )
+    connections_svg: list[str] = create_svg_connections(
+        network_zone, hub_positions
+    )
 
     drones_html: list[str] = []
     drone_anim_css: list[str] = []
@@ -349,12 +432,17 @@ def generate_html(planner: RoutePlanner) -> str:
         dron_color: str = DRONE_COLORS[drone.id % len(DRONE_COLORS)]
         start_coord_x, start_coord_y = hub_positions[network_zone.start.name]
         drones_html.append(
-            f'<div class="drone" id="drone{drone.id}" '
-            f'style="left:{start_coord_x}px; top:{start_coord_y}px; background:{dron_color};">'
-            f'D{drone.id}</div>'
+            f'''<div class="drone" id="drone{drone.id}"
+                style="left:{start_coord_x}px;
+                    top:{start_coord_y}px;
+                    background:{dron_color};">
+                D{drone.id}
+            </div>'''
         )
         drone_anim_css.append(
-            f'#drone{drone.id} {{ animation: drone{drone.id} {anim_duration}s linear infinite; }}'
+            f'''#drone{drone.id} {{
+                animation: drone{drone.id} {anim_duration}s linear infinite;
+            }}'''
         )
 
     keyframes_str = '\n'.join(keyframes_css)
@@ -505,24 +593,24 @@ def generate_html(planner: RoutePlanner) -> str:
 </style>
 </head>
 <body>
-  <h1>Fly-In Visualization</h1>
-  <div class="controls">
-    <button id="modeBtn">Manual</button>
-    <button class="arrow" id="prevBtn" disabled>&#9664;</button>
-    <span class="turn-display" id="turnDisplay">Auto</span>
-    <button class="arrow" id="nextBtn" disabled>&#9654;</button>
-  </div>
-  <div class="map">
-    <svg class="connections">
-      {conns_str}
-    </svg>
-    {hubs_str}
-    {drones_str}
-  </div>
+    <h1>Fly-In Visualization</h1>
+    <div class="controls">
+        <button id="modeBtn">Manual</button>
+        <button class="arrow" id="prevBtn" disabled>&#9664;</button>
+        <span class="turn-display" id="turnDisplay">Auto</span>
+        <button class="arrow" id="nextBtn" disabled>&#9654;</button>
+    </div>
+    <div class="map">
+        <svg class="connections">
+            {conns_str}
+        </svg>
+        {hubs_str}
+        {drones_str}
+    </div>
 <script>
 const Mode = Object.freeze({{
-  AUTO: 'Auto',
-  MANUAL: 'Manual'
+    AUTO: 'Auto',
+    MANUAL: 'Manual'
 }});
 
 const prevBtn = document.getElementById('prevBtn')
@@ -534,126 +622,147 @@ const dronePositions = {drone_positions_json};
 const hubOccupancy = {hub_occupancy_json};
 const totalTurns = {total_turns};
 const moveTime = 500;
-const animCSS = {json.dumps({f'drone{d.id}': f'drone{d.id} {anim_duration}s linear infinite' for d in planner.drone_list})};
+const animCSS = {
+    json.dumps(
+        {
+            f'drone{d.id}':
+            f'drone{d.id} {anim_duration}s linear infinite'
+            for d
+            in planner.drone_list
+        }
+    )
+};
 
 let autoMode = true;
 let currentTurn = 0;
 let moving = false;
-	
+
 let animStart = performance.now();
 let occupancyInterval = null;
 
-const prevTurn = () => {{ if (!autoMode && !moving) setTurn(currentTurn - 1, true); }};
-const nextTurn = () => {{ if (!autoMode && !moving) setTurn(currentTurn + 1, true); }};
+const prevTurn = () => {{
+    if (!autoMode && !moving) setTurn(currentTurn - 1, true);
+}};
+const nextTurn = () => {{
+    if (!autoMode && !moving) setTurn(currentTurn + 1, true);
+}};
 
 prevBtn.addEventListener('click', prevTurn);
 nextBtn.addEventListener('click', nextTurn);
 modeBtn.addEventListener('click', toggleMode);
 
 document.addEventListener('keydown', (event) => {{
-  if (!autoMode) {{
-    if (event.key === 'ArrowLeft') {{ event.preventDefault(); prevTurn(); }}
-    if (event.key === 'ArrowRight') {{ event.preventDefault(); nextTurn(); }}
-  }}
+    if (!autoMode) {{
+        if (event.key === 'ArrowLeft') {{
+            event.preventDefault(); prevTurn();
+        }}
+        if (event.key === 'ArrowRight') {{
+            event.preventDefault(); nextTurn();
+        }}
+    }}
 }});
 
 if (autoMode) StopOccupancyTimer(false);
 
 function toggleMode() {{
-  autoMode = !autoMode;
-  const drones = document.querySelectorAll('.drone');
+    autoMode = !autoMode;
+    const drones = document.querySelectorAll('.drone');
 
-  if (autoMode) {{
-    modeBtn.textContent = Mode.MANUAL;
-    modeBtn.classList.remove('active');
-    turnDisplay.textContent = Mode.AUTO;
+    if (autoMode) {{
+        modeBtn.textContent = Mode.MANUAL;
+        modeBtn.classList.remove('active');
+        turnDisplay.textContent = Mode.AUTO;
 
-    drones.forEach(drone => {{
-      drone.style.transition = 'none';
-      drone.style.removeProperty('left');
-      drone.style.removeProperty('top');
-      drone.style.animation = 'none';
-      drone.offsetHeight;
-      drone.style.animation = animCSS[drone.id];
-      drone.style.animationDelay = -(currentTurn * 1000) + 'ms';
-    }});
+        drones.forEach(drone => {{
+            drone.style.transition = 'none';
+            drone.style.removeProperty('left');
+            drone.style.removeProperty('top');
+            drone.style.animation = 'none';
+            drone.offsetHeight;
+            drone.style.animation = animCSS[drone.id];
+            drone.style.animationDelay = -(currentTurn * 1000) + 'ms';
+        }});
 
-    animStart = performance.now() - (currentTurn * 1000);
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    StopOccupancyTimer(false);
+        animStart = performance.now() - (currentTurn * 1000);
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        StopOccupancyTimer(false);
 
-  }} else {{
-    modeBtn.textContent = Mode.AUTO;
-    modeBtn.classList.add('active');
-    StopOccupancyTimer(true);
+    }} else {{
+        modeBtn.textContent = Mode.AUTO;
+        modeBtn.classList.add('active');
+        StopOccupancyTimer(true);
 
-    currentTurn = updateCurrentTurn();
+        currentTurn = updateCurrentTurn();
 
-    drones.forEach(d => {{
-      d.style.animation = 'none';
-      d.style.transition = `left ${{moveTime}}ms ease, top ${{moveTime}}ms ease`;
-    }});
+        drones.forEach(d => {{
+            d.style.animation = 'none';
+            d.style.transition = `left ${{moveTime}}ms ease,
+                top ${{moveTime}}ms ease`;
+        }});
 
-    setTurn(currentTurn, false);
-  }}
+        setTurn(currentTurn, false);
+    }}
 }}
 
 function StopOccupancyTimer(isStoped) {{
-  if (occupancyInterval) clearInterval(occupancyInterval);
-  if (isStoped) occupancyInterval = null;
-  else occupancyInterval = setInterval(
-    () => {{updateHubOccupancy(updateCurrentTurn())}}
-    ,200
-  );
+    if (occupancyInterval) clearInterval(occupancyInterval);
+    if (isStoped) occupancyInterval = null;
+    else occupancyInterval = setInterval(
+        () => {{updateHubOccupancy(updateCurrentTurn())}}
+        ,200
+    );
 }}
 
 function updateCurrentTurn() {{
-  const time_elapsed = performance.now() - animStart;
-  return Math.floor((time_elapsed + 500) / 1000) % totalTurns;
+    const time_elapsed = performance.now() - animStart;
+    return Math.floor((time_elapsed + 500) / 1000) % totalTurns;
 }}
 
 function setTurn(turn, animate) {{
-  currentTurn = Math.max(0, Math.min(turn, totalTurns));
-  applyTurn(currentTurn, animate);
-  turnDisplay.textContent = `Turn ${{currentTurn}}/${{totalTurns}}`;
-  updateButtons();
+    currentTurn = Math.max(0, Math.min(turn, totalTurns));
+    applyTurn(currentTurn, animate);
+    turnDisplay.textContent = `Turn ${{currentTurn}}/${{totalTurns}}`;
+    updateButtons();
 }}
 
 function applyTurn(turn, animate) {{
-  if (animate && !autoMode) {{
-    moving = true;
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    setTimeout(() => {{ moving = false; updateButtons(); }}, moveTime);
-  }}
-
-  for (const [id, positions] of Object.entries(dronePositions)) {{
-    const drone = document.getElementById('drone' + id);
-    if (drone) {{
-      const index = Math.min(turn, positions.length - 1);
-	    const position = positions[index];
-	    drone.style.left = position.x + 'px';
-	    drone.style.top = position.y + 'px';
+    if (animate && !autoMode) {{
+        moving = true;
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        setTimeout(() => {{ moving = false; updateButtons(); }}, moveTime);
     }}
-  }}
-  updateHubOccupancy(turn);
+
+    for (const [id, positions] of Object.entries(dronePositions)) {{
+        const drone = document.getElementById('drone' + id);
+        if (drone) {{
+            const index = Math.min(turn, positions.length - 1);
+            const position = positions[index];
+            drone.style.left = position.x + 'px';
+            drone.style.top = position.y + 'px';
+        }}
+    }}
+    updateHubOccupancy(turn);
 }}
 
 function updateButtons() {{
-  if (!autoMode) {{
-    prevBtn.disabled = moving || currentTurn <= 0;
-    nextBtn.disabled = moving || currentTurn >= totalTurns;
-  }}
+    if (!autoMode) {{
+        prevBtn.disabled = moving || currentTurn <= 0;
+        nextBtn.disabled = moving || currentTurn >= totalTurns;
+    }}
 }}
 
 function updateHubOccupancy(turn) {{
-  const occupancy = hubOccupancy[turn] || {{}};
-  document.querySelectorAll('.hub-occupancy').forEach(hub_occupancy => {{
-    const max_drones = hub_occupancy.parentElement.dataset.max;
-    const drones_in_hub = occupancy[hub_occupancy.id.replace('occupancy-', '')] || 0;
-    hub_occupancy.textContent = `${{drones_in_hub}}/${{max_drones}}`;
-  }});
+    const occupancy = hubOccupancy[turn] || {{}};
+    document.querySelectorAll('.hub-occupancy').forEach(hub_occupancy => {{
+        const max_drones = hub_occupancy.parentElement.dataset.max;
+        const drones_in_hub = (
+            occupancy[hub_occupancy.id.replace('occupancy-', '')]
+            || 0
+        );
+        hub_occupancy.textContent = `${{drones_in_hub}}/${{max_drones}}`;
+    }});
 }}
 </script>
 </body>
@@ -663,12 +772,16 @@ function updateHubOccupancy(turn) {{
 def main() -> None:
     """Main CLI entry point for visualizer execution.
 
-    Parses command-line arguments, loads network layout configuration, executes route planning,
-    and writes rendered visualization HTML to the requested file path.
+    Parses command-line arguments, loads network layout configuration,
+    executes route planning, and writes rendered visualization HTML
+    to the requested file path.
     """
     if len(sys.argv) < 2 or len(sys.argv) > 3:
         print('Usage: python visualizer.py <map_file> [output_file]')
-        print('Example: python visualizer.py maps/easy/01_linear_path.txt output.html')
+        print(
+            'Example: python visualizer.py maps/easy/01_linear_path.txt '
+            'output.html'
+        )
         sys.exit(1)
 
     map_file = sys.argv[1]

@@ -36,22 +36,33 @@ class Parser():
         self.file = file
 
     def parser(self) -> NetworkZone:
-        """Reads, validates, and builds a complete NetworkZone object from the file.
+        """Reads, validates, and builds a complete NetworkZone object
+        from the file.
 
         Parses line by line, creating start, end, and intermediate hubs as well
-        as verifying connection uniqueness, node coordinate integrity, and name conflicts.
+        as verifying connection uniqueness, node coordinate integrity,
+        and name conflicts.
 
         Returns:
-            NetworkZone: Fully instantiated and validated network topology object.
+            NetworkZone:
+                Fully instantiated and validated network topology object.
 
         Raises:
-            ValueError: If file content violates syntax rules, missing required hubs,
-                contains duplicated hub names/coordinates, or duplicated connections.
+            ValueError: If file content violates syntax rules,
+                missing required hubs, contains duplicated hub
+                names/coordinates, or duplicated connections.
         """
         with open(self.file) as file:
-            lines: list[str] = [line for line in file.readlines() if not line.startswith('#') and line.strip()]
+            lines: list[str] = [
+                line
+                for line
+                in file.readlines()
+                if not line.startswith('#') and line.strip()
+            ]
             if not self.first_drones_line(lines[0]):
-                raise ValueError('The first line should be the number of drones.')
+                raise ValueError(
+                    'The first line should be the number of drones.'
+                )
             if not self.extreme_zones(lines):
                 raise ValueError('There must be an entrance and an exit.')
             drones: int | None = None
@@ -68,16 +79,26 @@ class Parser():
                         try:
                             nb_dron: int = int(value.strip())
                             if drones is not None:
-                                raise ValueError('Value of number drones already set.')
+                                raise ValueError(
+                                    'Value of number drones already set.'
+                                )
                             if nb_dron < 0:
-                                raise ValueError('Invalid drone count, the number must be positive integer.')
+                                raise ValueError(
+                                    'Invalid drone count, the number '
+                                    'must be positive integer.'
+                                )
                             elif nb_dron == 0:
-                                raise ValueError('Invalid drone count, the number must be at least 1.')
+                                raise ValueError(
+                                    'Invalid drone count, the number must '
+                                    'be at least 1.'
+                                )
                             drones = nb_dron
                         except ValueError as e:
                             if str(e):
                                 raise e
-                            raise ValueError('The value of number drones must be an int.')
+                            raise ValueError(
+                                'The value of number drones must be an int.'
+                            )
                     case TypeData.START_HUB:
                         if start is None:
                             data: list[Any] = self.extract_data(value)
@@ -96,16 +117,26 @@ class Parser():
                     case TypeData.CONNECTION:
                         data = self.extract_data(value)
                         if start is None or end is None:
-                            raise ValueError('Start and end hubs must be defined before connections.')
+                            raise ValueError(
+                                'Start and end hubs must be '
+                                'defined before connections.'
+                            )
                         all_hubs: list[Hub] = hubs + [start, end]
                         data.append(all_hubs)
                         connections.append(Connection(*data))
             if drones is None or start is None or end is None:
-                raise ValueError('The file must contain the number of drones, a start hub, and an end hub.')
-            network_zone: NetworkZone = NetworkZone(drones, start, end, hubs, connections)
+                raise ValueError(
+                    'The file must contain the number of drones, '
+                    'a start hub, and an end hub.'
+                )
+            network_zone: NetworkZone = NetworkZone(
+                drones, start, end, hubs, connections
+            )
             net_hubs: list[Hub] = network_zone.all_hubs()
             hub_names: list[str] = [hub.name for hub in net_hubs]
-            hub_coords: list[tuple[int, int]] = [(hub.coord_x, hub.coord_y)for hub in net_hubs]
+            hub_coords: list[tuple[int, int]] = [
+                (hub.coord_x, hub.coord_y)for hub in net_hubs
+            ]
             if len(hub_names) != len(set(hub_names)):
                 raise ValueError('All zones must have unique names.')
             if len(hub_coords) != len(set(hub_coords)):
@@ -128,7 +159,8 @@ class Parser():
             line (str): The raw text line to check.
 
         Returns:
-            bool: True if the line contains the NUMBER_DRONES key, False otherwise.
+            bool: True if the line contains the NUMBER_DRONES key,
+                False otherwise.
         """
         if TypeData.NUMBER_DRONES in line:
             return True
@@ -136,16 +168,19 @@ class Parser():
             return False
 
     def extreme_zones(self, lines: list[str]) -> bool:
-        """Checks whether both start and end hub definitions exist in the file content.
+        """Checks whether both start and end hub definitions exist
+        in the file content.
 
         Args:
-            lines (list[str]): List of stripped lines from the configuration file.
+            lines (list[str]):
+                List of stripped lines from the configuration file.
 
         Returns:
-            bool: True if both START_HUB and END_HUB keys are present, False otherwise.
+            bool: True if both START_HUB and END_HUB keys are present,
+                False otherwise.
         """
         if (
-            any(TypeData.START_HUB in line for line in lines) 
+            any(TypeData.START_HUB in line for line in lines)
             and any(TypeData.END_HUB in line for line in lines)
         ):
             return True
@@ -153,13 +188,15 @@ class Parser():
             return False
 
     def extract_data(self, crude_data: str) -> list[Any]:
-        """Splits raw hub or connection line strings into arguments and metadata dictionaries.
+        """Splits raw hub or connection line strings into arguments
+        and metadata dictionaries.
 
         Args:
             crude_data (str): Unparsed value portion of a configuration line.
 
         Returns:
-            list[Any]: List containing raw parameter tokens followed by a metadata dict.
+            list[Any]: List containing raw parameter tokens followed
+                by a metadata dict.
 
         Raises:
             ValueError: If more than one metadata block (`[...]`) is detected.
@@ -173,9 +210,9 @@ class Parser():
         else:
             return [*data, {}]
 
-
     def metadata_valid(self, metadata: str) -> dict[str, Any]:
-        """Parses key-value metadata strings inside square brackets into a dictionary.
+        """Parses key-value metadata strings inside square brackets
+        into a dictionary.
 
         Args:
             metadata (str): Raw string of key=value pairs separated by spaces.
@@ -192,7 +229,8 @@ class Parser():
             if len(split_data) < 2 or split_data[1] == '':
                 raise ValueError(
                     'The metadata is invalid.'
-                    'It requires a key or value separated by an equals sign to be valid.'
+                    'It requires a key or value separated by '
+                    'an equals sign to be valid.'
                     'For more than one argument, separate them with spaces.'
                 )
             else:

@@ -14,10 +14,13 @@ class MapNode:
 
     Attributes:
         hub (Hub): The underlying Hub object associated with this node.
-        remaining_cost (int): Estimated turns/cost required to reach the destination node.
+        remaining_cost (int):
+            Estimated turns/cost required to reach the destination node.
         neighbors (dict[str, MapNode]): Adjacent nodes mapped by hub name.
-        max_drones (int): Maximum drone capacity allowed simultaneously at this hub.
-        priority_count (int): Cumulative count of priority zones along the path to destination.
+        max_drones (int):
+            Maximum drone capacity allowed simultaneously at this hub.
+        priority_count (int): Cumulative count of priority zones
+            along the path to destination.
     """
     hub: Hub
     remaining_cost: int
@@ -46,16 +49,19 @@ class Mapper:
 
     Attributes:
         nodes (dict[str, MapNode]): Map of hub names to MapNode instances.
-        connection_capacity (dict[str, int]): Map of formatted edge keys to max capacity limits.
+        connection_capacity (dict[str, int]):
+            Map of formatted edge keys to max capacity limits.
     """
     nodes: dict[str, MapNode]
     connection_capacity: dict[str, int]
 
     def __init__(self, network_zone: NetworkZone) -> None:
-        """Builds graph nodes and connections from a given NetworkZone topology.
+        """Builds graph nodes and connections from a given
+        NetworkZone topology.
 
         Args:
-            network_zone (NetworkZone): Network topology containing hubs and connections.
+            network_zone (NetworkZone):
+                Network topology containing hubs and connections.
         """
         self.nodes = {}
         self.connection_capacity = {}
@@ -63,23 +69,27 @@ class Mapper:
         for hub in all_hubs:
             self.nodes[hub.name] = MapNode(hub)
         for connection in network_zone.connections:
-            init_hub_name: str
-            final_hub_name: str
-            init_hub_name, final_hub_name = connection.init_hub.name, connection.final_hub.name
+            init_hub_name: str = connection.init_hub.name
+            final_hub_name: str = connection.final_hub.name
             init_node: MapNode = self.nodes[init_hub_name]
             final_node: MapNode = self.nodes[final_hub_name]
             init_node.neighbors[final_hub_name] = final_node
             final_node.neighbors[init_hub_name] = init_node
-            unique_name: str = self.connection_key(init_hub_name, final_hub_name)
-            self.connection_capacity[unique_name] = int(connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1))
+            unique_name: str = self.connection_key(
+                init_hub_name, final_hub_name
+            )
+            self.connection_capacity[unique_name] = int(
+                connection.metadata.get(TMConnection.MAX_LINK_CAPACITY, 1)
+            )
         self._calculate_remaining_costs(network_zone.end.name)
         self._calculate_priority_counts()
 
     def _calculate_remaining_costs(self, end_hub_name: str) -> None:
-        """Computes shortest turn costs from all accessible nodes to the destination.
+        """Computes shortest turn costs from all accessible nodes
+        to the destination.
 
-        Uses Breadth-First Search (BFS) starting from the destination hub backwards,
-        skipping restricted hubs with a turn cost of -1.
+        Uses Breadth-First Search (BFS) starting from the destination
+        hub backwards, skipping restricted hubs with a turn cost of -1.
 
         Args:
             end_hub_name (str): Identifier of the destination hub.
@@ -92,30 +102,48 @@ class Mapper:
             for neighbor_hub in current_hub.neighbors.values():
                 if neighbor_hub.hub.get_turn_zone() == -1:
                     continue
-                new_cost: int = current_hub.remaining_cost + neighbor_hub.hub.get_turn_zone()
-                if neighbor_hub.remaining_cost == -1 or new_cost < neighbor_hub.remaining_cost:
+                new_cost: int = (
+                    current_hub.remaining_cost +
+                    neighbor_hub.hub.get_turn_zone()
+                )
+                if (
+                    neighbor_hub.remaining_cost == -1 or
+                    new_cost < neighbor_hub.remaining_cost
+                ):
                     neighbor_hub.remaining_cost = new_cost
                     neighbor_queue.append(neighbor_hub)
 
     def _calculate_priority_counts(self) -> None:
         """Calculates cumulative priority hub bonuses along optimal paths.
 
-        Traverses nodes sorted by remaining cost to maximize priority hub counts
-        for drones choosing between equal-cost paths.
+        Traverses nodes sorted by remaining cost to maximize priority
+        hub counts for drones choosing between equal-cost paths.
         """
-        sorted_nodes: list[MapNode] = sorted(self.nodes.values(), key=lambda node: node.remaining_cost)
+        sorted_nodes: list[MapNode] = sorted(
+            self.nodes.values(),
+            key=lambda node: node.remaining_cost
+        )
         for node in sorted_nodes:
             for neighbor in node.neighbors.values():
-                expected_remaining_cost: int = node.remaining_cost + neighbor.hub.get_turn_zone()
+                expected_remaining_cost: int = (
+                    node.remaining_cost + neighbor.hub.get_turn_zone()
+                )
                 if neighbor.remaining_cost == expected_remaining_cost:
-                    bonus: int = 1 if neighbor.hub.metadata.get(TMHub.ZONE) == TypeZone.PRIORITY else 0
+                    if (
+                        neighbor.hub.metadata.get(TMHub.ZONE) ==
+                        TypeZone.PRIORITY
+                    ):
+                        bonus: int = 1
+                    else:
+                        bonus = 0
                     new_count: int = node.priority_count + bonus
                     if new_count > neighbor.priority_count:
                         neighbor.priority_count = new_count
 
     @staticmethod
     def connection_key(current_hub: str, next_hub: str) -> str:
-        """Generates a canonical, order-independent lookup key for an edge between two hubs.
+        """Generates a canonical, order-independent lookup key for
+        an edge between two hubs.
 
         Args:
             current_hub (str): Name of the first hub.

@@ -1,7 +1,8 @@
 """Module for representing hubs, hub metadata, and console color formatting.
 
 Defines enumerations for hub metadata types, zone behaviors, color themes,
-ANSI console color codes, and the Hub class responsible for modeling network nodes.
+ANSI console color codes, and the Hub class responsible
+for modeling network nodes.
 """
 from typing import Any
 from strenum import StrEnum
@@ -43,6 +44,7 @@ class TypeColor(StrEnum):
     DARKRED = 'darkred'
     RAINBOW = 'rainbow'
 
+
 class TypeConsoleColor(StrEnum):
     """Enumeration of ANSI escape codes for formatted terminal output."""
     BLACK = '\033[30m'
@@ -63,15 +65,18 @@ class TypeConsoleColor(StrEnum):
     VIOLET = '\033[38;5;129m'
     DARKRED = '\033[38;5;88m'
     RESET = '\033[0m'
+
     @classmethod
     def rainbow(cls, text: str) -> str:
-        """Applies a multi-color rainbow gradient across individual characters of text.
+        """Applies a multi-color rainbow gradient
+        across individual characters of text.
 
         Args:
             text (str): The input text string to format with rainbow colors.
 
         Returns:
-            str: An ANSI-formatted string with cyclic rainbow coloring per character.
+            str: An ANSI-formatted string with cyclic rainbow coloring
+                per character.
         """
         palette: list[str] = [
             cls.RED,
@@ -88,14 +93,17 @@ class TypeConsoleColor(StrEnum):
             colored_chars.append(f'{color}{char}')
         return ''.join(colored_chars) + cls.RESET
 
+
 class Hub():
-    """Represents a network hub (node) with spatial coordinates and metadata rules.
+    """Represents a network hub (node) with spatial coordinates
+    and metadata rules.
 
     Attributes:
         name (str): Unique name identifier for the hub.
         coord_x (int): Horizontal X coordinate on the grid.
         coord_y (int): Vertical Y coordinate on the grid.
-        metadata (dict[str, Any]): Dictionary containing hub configuration (e.g. zone, color, max_drones).
+        metadata (dict[str, Any]): Dictionary containing hub configuration
+            (e.g. zone, color, max_drones).
         drones_number (int): Current count of drones parked at this hub.
     """
     name: str
@@ -103,9 +111,16 @@ class Hub():
     coord_y: int
     metadata: dict[str, Any]
     drones_number: int
-    
-    def __init__(self, name: str, coord_x: str, coord_y: str, metadata: dict[str, Any]) -> None:
-        """Initializes a Hub instance after validating name, coordinates, and metadata.
+
+    def __init__(
+        self,
+        name: str,
+        coord_x: str,
+        coord_y: str,
+        metadata: dict[str, Any]
+    ) -> None:
+        """Initializes a Hub instance after validating name, coordinates,
+        and metadata.
 
         Args:
             name (str): Hub name identifier.
@@ -114,7 +129,8 @@ class Hub():
             metadata (dict[str, Any]): Configuration parameters for the hub.
 
         Raises:
-            ValueError: If name syntax, coordinates, or metadata fail validation rules.
+            ValueError: If name syntax, coordinates,
+                or metadata fail validation rules.
         """
         self.parser(name, coord_x, coord_y, metadata)
         self.name = name
@@ -130,20 +146,25 @@ class Hub():
         coord_y: str,
         metadata: dict[str, Any]
     ) -> None:
-        """Validates naming constraints, integer coordinate parsing, and metadata key/values.
+        """Validates naming constraints, integer coordinate parsing,
+        and metadata key/values.
 
         Args:
             name (str): Hub name string to check.
             coord_x (str): Raw string input for X coordinate.
             coord_y (str): Raw string input for Y coordinate.
-            metadata (dict[str, Any]): Dictionary containing metadata to validate.
+            metadata (dict[str, Any]): Dictionary containing
+                metadata to validate.
 
         Raises:
-            ValueError: If the name contains spaces/dashes, coordinates are non-integers,
-                or metadata keys and values do not conform to allowed enumerations and limits.
+            ValueError: If the name contains spaces/dashes, coordinates
+                are non-integers, or metadata keys and values do not
+                conform to allowed enumerations and limits.
         """
         if ' ' in name or '-' in name:
-            raise ValueError(f'The name “{name}” cannot contain spaces or dashes')
+            raise ValueError(
+                f'The name “{name}” cannot contain spaces or dashes'
+            )
         try:
             int(coord_x)
         except ValueError:
@@ -168,19 +189,28 @@ class Hub():
                     try:
                         max_drones: int = int(metadata[data])
                         if not isinstance(max_drones, int) or max_drones < 1:
-                            raise ValueError('max_drones must be an integer greater than 1 if you want to change it')
+                            raise ValueError(
+                                'max_drones must be an integer greater '
+                                'than 1 if you want to change it'
+                            )
                     except ValueError as e:
                         if str(e):
-                                raise e
-                        raise ValueError('max_drones must be an positive integer')
+                            raise e
+                        raise ValueError(
+                            'max_drones must be an positive integer'
+                        )
                 case _:
-                    raise ValueError(f'That metadata {data} is not valid for the Hub')
+                    raise ValueError(
+                        f'That metadata {data} is not valid for the Hub'
+                    )
 
     def get_turn_zone(self) -> int:
-        """Determines the turn duration cost required to navigate through this hub's zone type.
+        """Determines the turn duration cost required to navigate through this
+            hub's zone type.
 
         Returns:
-            int: Turn cost based on zone type (1 for normal/priority, 2 for restricted, -1 for blocked).
+            int: Turn cost based on zone type
+                (1 for normal/priority, 2 for restricted, -1 for blocked).
         """
         match self.metadata.get(TypeMetadata.ZONE):
             case TypeZone.NORMAL:
