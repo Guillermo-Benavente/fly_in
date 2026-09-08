@@ -188,16 +188,11 @@ class Hub():
                 case TypeMetadata.MAX_DRONES:
                     try:
                         max_drones: int = int(metadata[data])
-                        if not isinstance(max_drones, int) or max_drones < 1:
-                            raise ValueError(
-                                'max_drones must be an integer greater '
-                                'than 1 if you want to change it'
-                            )
-                    except ValueError as e:
-                        if str(e):
-                            raise e
+                        if not (1 <= max_drones <= 100):
+                            raise ValueError
+                    except ValueError:
                         raise ValueError(
-                            'max_drones must be an positive integer'
+                            'max_drones must be an integer between 1 and 100'
                         )
                 case _:
                     raise ValueError(

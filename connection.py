@@ -98,17 +98,10 @@ class Connection():
             else:
                 try:
                     max_link_capacity: int = int(metadata[data])
-                    if (
-                        not isinstance(max_link_capacity, int)
-                        or max_link_capacity < 1
-                    ):
-                        raise ValueError(
-                            'max_link_capacity must be an integer ',
-                            'greater than 1 if you want to change it'
-                        )
-                except ValueError as e:
-                    if str(e):
-                        raise e
+                    if not (1 <= max_link_capacity <= 100):
+                        raise ValueError
+                except ValueError:
                     raise ValueError(
-                        'max_link_capacity must be an positive integer'
+                        'max_link_capacity must be an '
+                        'integer between 1 and 100'
                     )
