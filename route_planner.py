@@ -254,6 +254,27 @@ class RoutePlanner():
             return False
         return True
 
+    def _format_node_color(self, value: str, hub: Hub | None) -> str:
+        """Applies ANSI color formatting to a node name based on hub metadata.
+
+        Args:
+            value (str): The node name or label to format.
+            hub (Hub | None): The hub instance containing color metadata.
+
+        Returns:
+            str: The color-formatted node string, or original value if no color
+                metadata is present or valid.
+        """
+        if not hub or TMHub.COLOR not in hub.metadata:
+            return value
+        color_name: str = hub.metadata[TMHub.COLOR]
+        if color_name.upper() in TypeConsoleColor.__members__:
+            color = TypeConsoleColor[color_name.upper()]
+            return f'{color}{value}{TypeConsoleColor.RESET}'
+        else:
+            return TypeConsoleColor.rainbow(value)
+
+
     def output(self) -> str:
         """Formats complete turn-by-turn drone flight logs with color coding.
 
@@ -262,7 +283,7 @@ class RoutePlanner():
         """
         lines: list[str] = []
         hubs_by_name = {h.name: h for h in self.network_zone.all_hubs()}
-        max_turns: int = max([len(dron.route) for dron in self.drone_list]) + 1
+        max_turns: int = max(len(drone.route) for drone in self.drone_list) + 1
         for iteration in range(max_turns):
             movements: list[str] = []
             for drone in self.drone_list:
@@ -270,33 +291,11 @@ class RoutePlanner():
                     last_value: str = drone.route.get(iteration - 1, '')
                     value: str = drone.route.get(iteration, '')
                     if last_value != value and not (
-                        value == self.network_zone.start.name and
-                        iteration == 0
+                        value == self.network_zone.start.name and iteration == 0
                     ):
-                        hub: Hub | None = hubs_by_name.get(value)
-                        if (hub and TMHub.COLOR in hub.metadata):
-                            color_name: str | None = (
-                                hub.metadata.get(TMHub.COLOR)
-                            )
-                        else:
-                            color_name = None
-                        if color_name and color_name.lower() == 'rainbow':
-                            colored_value: str = (
-                                TypeConsoleColor.rainbow(value)
-                            )
-                        elif (
-                            color_name and
-                            color_name.upper()
-                            in TypeConsoleColor.__members__
-                        ):
-                            color: TypeConsoleColor = (
-                                TypeConsoleColor[color_name.upper()]
-                            )
-                            colored_value = (
-                                f'{color}{value}{TypeConsoleColor.RESET}'
-                            )
-                        else:
-                            colored_value = value
+                        colored_value = self._format_node_color(
+                            value, hubs_by_name.get(value)
+                        )
                         movements.append(f'D{drone.id}-{colored_value}')
             if movements:
                 lines.append(' '.join(movements))

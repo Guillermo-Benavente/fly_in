@@ -146,23 +146,14 @@ def run_interactive_menu() -> None:
             input(f'{TCC.YELLOW}Press Enter to try again...{TCC.RESET}')
 
 
-def run_single_map(map_path: str) -> None:
-    """Parses and runs route planning for a single given map file.
-
-    Args:
-        map_path (str): File system path to the target map text file.
-    """
-    network_map: NetworkZone = Parser(map_path).parser()
-    planner = RoutePlanner(network_map)
-    print(planner.output())
-
-
 def main() -> None:
     """Parses command-line arguments and routes execution to single mode
     or interactive CLI."""
     if len(sys.argv) == 2:
         try:
-            run_single_map(sys.argv[1])
+            network_map: NetworkZone = Parser(sys.argv[1]).parser()
+            planner = RoutePlanner(network_map)
+            print(planner.output())
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)
             sys.exit(1)
