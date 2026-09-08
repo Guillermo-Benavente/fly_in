@@ -59,7 +59,7 @@ class Parser():
                 in file.readlines()
                 if not line.startswith('#') and line.strip()
             ]
-            if not self.first_drones_line(lines[0]):
+            if not self.first_drones_line(lines):
                 raise ValueError(
                     'The first line should be the number of drones.'
                 )
@@ -92,6 +92,11 @@ class Parser():
                                     'Invalid drone count, the number must '
                                     'be at least 1.'
                                 )
+                            elif nb_dron > 100:
+                                raise ValueError(
+                                    'Invalid drone count, the number must '
+                                    'be less than 100.'
+                                )
                             drones = nb_dron
                         except ValueError as e:
                             if str(e):
@@ -99,21 +104,29 @@ class Parser():
                             raise ValueError(
                                 'The value of number drones must be an int.'
                             )
-                    case TypeData.START_HUB:
-                        if start is None:
-                            data: list[Any] = self.extract_data(value)
-                            start = Hub(*data)
+                    case TypeData.START_HUB | TypeData.END_HUB | TypeData.HUB:
+                        data: dict[str, Any] = self.extract_data(value)
+                        if len(data['values']) < 3:
+                            raise ValueError(
+                                'Hub line requires a name, '
+                                'X coordinate, and Y coordinate.'
+                            )
+                        name, x, y = data['values']
+                        hub: Hub = Hub(name, x, y, data['metadata'])
+                        if key == TypeData.START_HUB:
+                            if start is not None:
+                                raise ValueError(
+                                    'Value of start hub already set.'
+                                )
+                            start = hub
+                        elif key == TypeData.END_HUB:
+                            if end is not None:
+                                raise ValueError(
+                                    'Value of end hub already set.'
+                                )
+                            end = hub
                         else:
-                            raise ValueError('Value of start hub already set.')
-                    case TypeData.END_HUB:
-                        if end is None:
-                            data = self.extract_data(value)
-                            end = Hub(*data)
-                        else:
-                            raise ValueError('Value of end hub already set.')
-                    case TypeData.HUB:
-                        data = self.extract_data(value)
-                        hubs.append(Hub(*data))
+                            hubs.append(hub)
                     case TypeData.CONNECTION:
                         data = self.extract_data(value)
                         if start is None or end is None:
@@ -122,8 +135,12 @@ class Parser():
                                 'defined before connections.'
                             )
                         all_hubs: list[Hub] = hubs + [start, end]
-                        data.append(all_hubs)
-                        connections.append(Connection(*data))
+                        connections.append(
+                            Connection(
+                                ' '.join(data['values']),
+                                data['metadata'], all_hubs
+                            )
+                        )
             if drones is None or start is None or end is None:
                 raise ValueError(
                     'The file must contain the number of drones, '
@@ -152,17 +169,20 @@ class Parser():
                 raise ValueError('All connections must have unique.')
             return network_zone
 
-    def first_drones_line(self, line: str) -> bool:
-        """Verifies if the specified line contains the drone count directive.
+    def first_drones_line(self, lines: list[str]) -> bool:
+        """Verifies if the specified lines list starts with the drone count
+        directive.
 
         Args:
-            line (str): The raw text line to check.
+            lines (list[str]): List of configuration file lines.
 
         Returns:
-            bool: True if the line contains the NUMBER_DRONES key,
+            bool: True if the first line contains the NUMBER_DRONES key,
                 False otherwise.
         """
-        if TypeData.NUMBER_DRONES in line:
+        if not lines:
+            return False
+        elif TypeData.NUMBER_DRONES in lines[0]:
             return True
         else:
             return False
@@ -187,7 +207,7 @@ class Parser():
         else:
             return False
 
-    def extract_data(self, crude_data: str) -> list[Any]:
+    def extract_data(self, crude_data: str) -> dict[str, Any]:
         """Splits raw hub or connection line strings into arguments
         and metadata dictionaries.
 
@@ -195,20 +215,36 @@ class Parser():
             crude_data (str): Unparsed value portion of a configuration line.
 
         Returns:
-            list[Any]: List containing raw parameter tokens followed
-                by a metadata dict.
+            dict[str, Any]: Dictionary containing 'values' list and
+                'metadata' dict.
 
         Raises:
-            ValueError: If more than one metadata block (`[...]`) is detected.
+            ValueError: If parameters are missing before metadata or if
+                more than one metadata block (`[...]`) is detected.
         """
-        all_data: list[str] = crude_data.strip().split('[')
+        if crude_data.strip().startswith('['):
+            raise ValueError('Missing parameters before metadata block.')
+        all_data: list[str] = crude_data.strip().split(' [')
         if len(all_data) > 2:
             raise ValueError('There can only be one metadata box')
         data: list[str] = all_data[0].strip().split(' ')
+        if len(data) > 3:
+            raw_y: str = data.pop()
+            raw_x: str = data.pop()
+            name: str = ' '.join(data)
+            data = [name, raw_x, raw_y]
         if len(all_data) == 2:
-            return [*data, self.metadata_valid(all_data[1][:-1])]
+            if not all_data[1].endswith(']'):
+                raise ValueError('Invalid metadata format.')
+            metadata = self.metadata_valid(all_data[1][:-1])
         else:
-            return [*data, {}]
+            if ']' in all_data[0] or '=' in all_data[0]:
+                raise ValueError('Invalid metadata format.')
+            metadata = {}
+        return {
+            'values': [*data],
+            'metadata': metadata
+        }
 
     def metadata_valid(self, metadata: str) -> dict[str, Any]:
         """Parses key-value metadata strings inside square brackets
@@ -226,11 +262,11 @@ class Parser():
         metadata_valid: dict[str, Any] = {}
         for data in metadata.split(' '):
             split_data = data.split('=')
-            if len(split_data) < 2 or split_data[1] == '':
+            if len(split_data) != 2 or split_data[1] == '':
                 raise ValueError(
-                    'The metadata is invalid.'
+                    'The metadata is invalid.\n'
                     'It requires a key or value separated by '
-                    'an equals sign to be valid.'
+                    'an equals sign to be valid.\n'
                     'For more than one argument, separate them with spaces.'
                 )
             else:

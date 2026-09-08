@@ -5,6 +5,8 @@ MAPS   := easy/01_linear_path easy/02_simple_fork easy/03_basic_capacity \
           medium/01_dead_end_trap medium/02_circular_loop medium/03_priority_puzzle \
           hard/01_maze_nightmare hard/02_capacity_hell hard/03_ultimate_challenge \
           challenger/01_the_impossible_dream
+TARGET_MAPS := $(if $(MAP),$(MAP),$(MAPS))
+
 install:
 	@echo "Setting up virtual environment..."
 	@python3 -m venv $(VENV)
@@ -33,11 +35,14 @@ lint-strict:
 
 visual:
 	@mkdir -p output
-	@for map in $(MAPS); do \
-		name=$${map##*/}; \
-		echo "Generating output/$$name.html ..."; \
-		$(PYTHON) visualizer.py maps/$$map.txt output/$$name.html; \
+	@for map_file in $(TARGET_MAPS); do \
+		if [ ! -f "$$map_file" ]; then \
+			echo "Error: Map file '$$map_file' not found." >&2; \
+			exit 1; \
+		fi; \
+		base_name=$$(basename "$$map_file" .txt); \
+		echo "Generating output/$$base_name.html from $$map_file ..."; \
+		$(PYTHON) visualizer.py "$$map_file" "output/$$base_name.html"; \
 	done
-	@echo "Done. HTML files in output/"
 
 .PHONY: install run debug clean lint lint-strict visual

@@ -77,15 +77,19 @@ class Connection():
                 integer values.
         """
         parts: list[str] = connection.split('-')
-        if len(parts) != 2:
+        if len(parts) != 2 or any(' ' in p for p in parts):
             raise ValueError(f'Invalid connection syntax: {connection}')
         init_hub, final_hub = parts
+        if init_hub == final_hub:
+            raise ValueError(f'Duplicate connection: {connection}')
         existing_hub_names: set[str] = {hub.name for hub in hubs}
         if (
             init_hub not in existing_hub_names
             or final_hub not in existing_hub_names
         ):
-            raise ValueError('Hubs must exist to create a connection')
+            raise ValueError(
+                f'Hubs must exist to create a connection "{connection}"'
+            )
         for data in metadata:
             if data != 'max_link_capacity':
                 raise ValueError(

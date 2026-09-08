@@ -72,7 +72,7 @@ To render the interactive HTML visualization file:
 
 ```bash
 # Generate visual output (defaults to output.html)
-make visualize MAP=maps/easy/01_linear_path.txt
+make visual MAP=maps/easy/01_linear_path.txt
 ```
 
 ### 3. Cleanup Rules
