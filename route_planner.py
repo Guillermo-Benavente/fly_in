@@ -274,7 +274,6 @@ class RoutePlanner():
         else:
             return TypeConsoleColor.rainbow(value)
 
-
     def output(self) -> str:
         """Formats complete turn-by-turn drone flight logs with color coding.
 
@@ -291,7 +290,8 @@ class RoutePlanner():
                     last_value: str = drone.route.get(iteration - 1, '')
                     value: str = drone.route.get(iteration, '')
                     if last_value != value and not (
-                        value == self.network_zone.start.name and iteration == 0
+                        value == self.network_zone.start.name
+                        and iteration == 0
                     ):
                         colored_value = self._format_node_color(
                             value, hubs_by_name.get(value)
