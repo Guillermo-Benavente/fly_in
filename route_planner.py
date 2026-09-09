@@ -93,7 +93,6 @@ class RoutePlanner():
             turn_movements: list[str] = []
             for index, drone in enumerate(active):
                 action: str = self._move_drone(index, drone, iteration_route)
-                self._move_drone(index, drone, iteration_route)
                 if action and action != drone.previous_zone:
                     colored_value = self._format_node_color(
                         action, hubs_by_name.get(action)
@@ -145,7 +144,7 @@ class RoutePlanner():
                 )
             else:
                 action_name = next_node.hub.name
-            drone.previous_zone = drone.current_zone
+            drone.previous_zone = drone.current_zone.name
             drone.current_zone = next_node.hub
             return action_name
 

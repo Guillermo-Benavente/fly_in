@@ -98,7 +98,7 @@ class Connection():
             else:
                 try:
                     max_link_capacity: int = int(metadata[data])
-                    if not (1 <= max_link_capacity <= 100):
+                    if 1 > max_link_capacity:
                         raise ValueError
                 except ValueError:
                     raise ValueError(

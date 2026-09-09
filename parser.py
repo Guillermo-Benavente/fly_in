@@ -70,10 +70,16 @@ class Parser():
             end: Hub | None = None
             hubs: list[Hub] = []
             connections: list[Connection] = []
-            for line in lines:
+            for num_line, line in enumerate(lines):
                 if line.strip() == '':
                     continue
                 key, value = line.strip().split(':', 1)
+                net_hubs: list[Hub] = hubs + [start, end]
+                if net_hubs:
+                    hub_names: list[str] = [hub.name for hub in net_hubs]
+                    hub_coords: list[tuple[int, int]] = [
+                        (hub.coord_x, hub.coord_y)for hub in net_hubs
+                    ]
                 match key:
                     case TypeData.NUMBER_DRONES:
                         try:
@@ -81,19 +87,19 @@ class Parser():
                             if drones is not None:
                                 raise ValueError(
                                     'Value of number drones already set.'
-                                    f'\nLine: {line}'
+                                    f'\nLine {num_line}: {line}'
                                 )
                             if nb_dron < 0:
                                 raise ValueError(
                                     'Invalid drone count, the number '
                                     'must be positive integer.'
-                                    f'\nLine: {line}'
+                                    f'\nLine {num_line}: {line}'
                                 )
                             elif nb_dron == 0:
                                 raise ValueError(
                                     'Invalid drone count, the number must '
                                     'be at least 1.'
-                                    f'\nLine: {line}'
+                                    f'\nLine {num_line}: {line}'
                                 )
                             drones = nb_dron
                         except ValueError as e:
@@ -101,7 +107,7 @@ class Parser():
                                 raise e
                             raise ValueError(
                                 'The value of number drones must be an int.'
-                                f'\nLine: {line}'
+                                f'\nLine {num_line}: {line}'
                             )
                     case TypeData.START_HUB | TypeData.END_HUB | TypeData.HUB:
                         data: dict[str, Any] = self.extract_data(value)
@@ -109,7 +115,7 @@ class Parser():
                             raise ValueError(
                                 'Hub line requires a name, '
                                 'X coordinate, and Y coordinate.'
-                                f'\nLine: {line}'
+                                f'\nLine {num_line}: {line}'
                             )
                         name, x, y = data['values']
                         hub: Hub = Hub(name, x, y, data['metadata'])
@@ -117,14 +123,14 @@ class Parser():
                             if start is not None:
                                 raise ValueError(
                                     'Value of start hub already set.'
-                                    f'\nLine: {line}'
+                                    f'\nLine {num_line}: {line}'
                                 )
                             start = hub
                         elif key == TypeData.END_HUB:
                             if end is not None:
                                 raise ValueError(
                                     'Value of end hub already set.'
-                                    f'\nLine: {line}'
+                                    f'\nLine {num_line}: {line}'
                                 )
                             end = hub
                         else:
@@ -135,41 +141,38 @@ class Parser():
                             raise ValueError(
                                 'Start and end hubs must be '
                                 'defined before connections.'
-                                f'\nLine: {line}'
+                                f'\nLine {num_line}: {line}'
                             )
-                        all_hubs: list[Hub] = hubs + [start, end]
                         connections.append(
                             Connection(
                                 ' '.join(data['values']),
-                                data['metadata'], all_hubs
+                                data['metadata'], net_hubs
                             )
                         )
-            if drones is None or start is None or end is None:
-                raise ValueError(
-                    'The file must contain the number of drones, '
-                    'a start hub, and an end hub.'
-                )
+                if net_hubs:
+                    if len(hub_names) != len(set(hub_names)):
+                        raise ValueError(
+                            'All zones must have unique names.'
+                            f'\nLine {num_line}: {line}'
+                        )
+                    if len(hub_coords) != len(set(hub_coords)):
+                        raise ValueError(
+                            'All zones must have unique coords.'
+                            f'\nLine {num_line}: {line}'
+                        )
+                if connections:
+                    net_connections: list[tuple[str, str]] = [
+                        (
+                            min(connection.init_hub.name, connection.final_hub.name),
+                            max(connection.init_hub.name, connection.final_hub.name)
+                        )
+                        for connection in connections
+                    ]
+                    if len(net_connections) != len(set(net_connections)):
+                        raise ValueError('All connections must have unique.')
             network_zone: NetworkZone = NetworkZone(
                 drones, start, end, hubs, connections
             )
-            net_hubs: list[Hub] = network_zone.all_hubs()
-            hub_names: list[str] = [hub.name for hub in net_hubs]
-            hub_coords: list[tuple[int, int]] = [
-                (hub.coord_x, hub.coord_y)for hub in net_hubs
-            ]
-            if len(hub_names) != len(set(hub_names)):
-                raise ValueError('All zones must have unique names.')
-            if len(hub_coords) != len(set(hub_coords)):
-                raise ValueError('All zones must have unique coords.')
-            net_connections: list[tuple[str, str]] = [
-                (
-                    min(connection.init_hub.name, connection.final_hub.name),
-                    max(connection.init_hub.name, connection.final_hub.name)
-                )
-                for connection in network_zone.connections
-            ]
-            if len(net_connections) != len(set(net_connections)):
-                raise ValueError('All connections must have unique.')
             return network_zone
 
     def first_drones_line(self, lines: list[str]) -> bool:
