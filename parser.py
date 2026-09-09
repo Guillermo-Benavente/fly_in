@@ -81,21 +81,19 @@ class Parser():
                             if drones is not None:
                                 raise ValueError(
                                     'Value of number drones already set.'
+                                    f'\nLine: {line}'
                                 )
                             if nb_dron < 0:
                                 raise ValueError(
                                     'Invalid drone count, the number '
                                     'must be positive integer.'
+                                    f'\nLine: {line}'
                                 )
                             elif nb_dron == 0:
                                 raise ValueError(
                                     'Invalid drone count, the number must '
                                     'be at least 1.'
-                                )
-                            elif nb_dron > 100:
-                                raise ValueError(
-                                    'Invalid drone count, the number must '
-                                    'be less than 100.'
+                                    f'\nLine: {line}'
                                 )
                             drones = nb_dron
                         except ValueError as e:
@@ -103,6 +101,7 @@ class Parser():
                                 raise e
                             raise ValueError(
                                 'The value of number drones must be an int.'
+                                f'\nLine: {line}'
                             )
                     case TypeData.START_HUB | TypeData.END_HUB | TypeData.HUB:
                         data: dict[str, Any] = self.extract_data(value)
@@ -110,6 +109,7 @@ class Parser():
                             raise ValueError(
                                 'Hub line requires a name, '
                                 'X coordinate, and Y coordinate.'
+                                f'\nLine: {line}'
                             )
                         name, x, y = data['values']
                         hub: Hub = Hub(name, x, y, data['metadata'])
@@ -117,12 +117,14 @@ class Parser():
                             if start is not None:
                                 raise ValueError(
                                     'Value of start hub already set.'
+                                    f'\nLine: {line}'
                                 )
                             start = hub
                         elif key == TypeData.END_HUB:
                             if end is not None:
                                 raise ValueError(
                                     'Value of end hub already set.'
+                                    f'\nLine: {line}'
                                 )
                             end = hub
                         else:
@@ -133,6 +135,7 @@ class Parser():
                             raise ValueError(
                                 'Start and end hubs must be '
                                 'defined before connections.'
+                                f'\nLine: {line}'
                             )
                         all_hubs: list[Hub] = hubs + [start, end]
                         connections.append(

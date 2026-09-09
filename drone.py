@@ -19,7 +19,7 @@ class Drone():
     """
     id: int
     current_zone: Hub
-    route: dict[int, str]
+    previous_zone: str
     in_transit: bool
 
     def __init__(self, id: int, current_zone: Hub):
@@ -31,5 +31,5 @@ class Drone():
         """
         self.id = id
         self.current_zone = current_zone
-        self.route = {}
+        self.previous_zone = ''
         self.in_transit = False

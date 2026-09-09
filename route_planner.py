@@ -4,6 +4,7 @@ Defines the RoutePlanner class, which manages drone fleet initialization,
 step-by-step navigation across network hubs using path cost heuristics,
 capacity limits, and turn outputs.
 """
+from typing import Generator
 from network_zone import NetworkZone
 from hub import TypeZone, TypeMetadata as TMHub, TypeConsoleColor, Hub
 from drone import Drone
@@ -35,7 +36,6 @@ class RoutePlanner():
         self.network_zone = network_zone
         self.mapper = Mapper(network_zone)
         self.drone_list = self._create_drones()
-        self._drone_routes()
 
     def _create_drones(self) -> list[Drone]:
         """Instantiates all drones assigned to the network and places them
@@ -51,7 +51,7 @@ class RoutePlanner():
             list_drones.append(drone)
         return list_drones
 
-    def _drone_routes(self) -> None:
+    def _drone_routes(self) -> Generator[str, None, None]:
         """Simulates iterative movements for all drones until
         reaching destination.
 
@@ -63,6 +63,7 @@ class RoutePlanner():
             self.mapper.nodes[self.network_zone.start.name].remaining_cost
         )
         max_iterations: int = start_cost * self.network_zone.drones
+        hubs_by_name: dict[str, Hub] = {h.name: h for h in self.network_zone.all_hubs()}
         iteration: int = 0
         while any(
             drone.current_zone != self.network_zone.end
@@ -89,17 +90,25 @@ class RoutePlanner():
                 self.mapper.nodes[drone.current_zone.name].remaining_cost
             )
             iteration_route: dict[str, int] = {}
+            turn_movements: list[str] = []
             for index, drone in enumerate(active):
-                self._move_drone(index, drone, iteration_route, iteration)
+                action: str = self._move_drone(index, drone, iteration_route)
+                self._move_drone(index, drone, iteration_route)
+                if action and action != drone.previous_zone:
+                    colored_value = self._format_node_color(
+                        action, hubs_by_name.get(action)
+                    )
+                    turn_movements.append(f'D{drone.id}-{colored_value}')
+            if turn_movements:
+                yield ' '.join(turn_movements)
             iteration += 1
 
     def _move_drone(
         self,
         drone_position: int,
         drone: Drone,
-        iteration_route: dict[str, int],
-        iteration: int
-    ) -> None:
+        iteration_route: dict[str, int]
+    ) -> str | None:
         """Executes a single step or transit delay for an individual drone.
 
         Args:
@@ -112,8 +121,7 @@ class RoutePlanner():
         """
         if drone.in_transit:
             drone.in_transit = False
-            drone.route[iteration] = drone.current_zone.name
-            return
+            return drone.current_zone.name
         next_node: MapNode = self._search_next_node(
             drone_position, drone, iteration_route
         )
@@ -121,7 +129,7 @@ class RoutePlanner():
             next_node.hub.metadata.get(TMHub.ZONE) == TypeZone.RESTRICTED
         )
         if drone.current_zone == next_node.hub:
-            drone.route[iteration] = drone.current_zone.name
+            return None
         else:
             drone.current_zone.drones_number -= 1
             next_node.hub.drones_number += 1
@@ -129,14 +137,17 @@ class RoutePlanner():
                 drone.current_zone.name, next_node.hub.name
             )
             iteration_route[key] = iteration_route.get(key, 0) + 1
+            action_name: str
             if is_restricted:
                 drone.in_transit = True
-                drone.route[iteration] = self._get_connection_name(
+                action_name = self._get_connection_name(
                     drone.current_zone.name, next_node.hub.name
                 )
             else:
-                drone.route[iteration] = next_node.hub.name
+                action_name = next_node.hub.name
+            drone.previous_zone = drone.current_zone
             drone.current_zone = next_node.hub
+            return action_name
 
     def _get_connection_name(self, hub_a: str, hub_b: str) -> str:
         """Retrieves the explicit name of a connection between two hubs.
@@ -273,30 +284,3 @@ class RoutePlanner():
             return f'{color}{value}{TypeConsoleColor.RESET}'
         else:
             return TypeConsoleColor.rainbow(value)
-
-    def output(self) -> str:
-        """Formats complete turn-by-turn drone flight logs with color coding.
-
-        Returns:
-            str: Multi-line string depicting drone movement logs across turns.
-        """
-        lines: list[str] = []
-        hubs_by_name = {h.name: h for h in self.network_zone.all_hubs()}
-        max_turns: int = max(len(drone.route) for drone in self.drone_list) + 1
-        for iteration in range(max_turns):
-            movements: list[str] = []
-            for drone in self.drone_list:
-                if iteration in drone.route:
-                    last_value: str = drone.route.get(iteration - 1, '')
-                    value: str = drone.route.get(iteration, '')
-                    if last_value != value and not (
-                        value == self.network_zone.start.name
-                        and iteration == 0
-                    ):
-                        colored_value = self._format_node_color(
-                            value, hubs_by_name.get(value)
-                        )
-                        movements.append(f'D{drone.id}-{colored_value}')
-            if movements:
-                lines.append(' '.join(movements))
-        return '\n'.join(lines)

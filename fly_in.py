@@ -78,6 +78,9 @@ def test_maps() -> None:
                     f'FAIL      | {path}: {len(planner.drone_list)} drones, '
                     f'{turns} turns — not all drones reached the end'
                 )
+        except KeyboardInterrupt:
+            print("\n[Simulation interrupted by user]", file=sys.stderr)
+            sys.exit(130)
         except Exception as e:
             failed += 1
             print(f'FAIL      | {path}: {type(e).__name__} — {e}')
@@ -131,7 +134,11 @@ def run_interactive_menu() -> None:
                 ).parser()
                 planner = RoutePlanner(network_map)
                 print(f'\n--- Output para {selected_path} ---')
-                print(planner.output())
+                for turn_line in planner._drone_routes():
+                    print(turn_line)
+            except KeyboardInterrupt:
+                print("\n[Simulation interrupted by user]", file=sys.stderr)
+                sys.exit(130)
             except Exception as e:
                 print(f'{TCC.RED}Error processing the map: {e}{TCC.RESET}')
             input(
@@ -153,7 +160,11 @@ def main() -> None:
         try:
             network_map: NetworkZone = Parser(sys.argv[1]).parser()
             planner = RoutePlanner(network_map)
-            print(planner.output())
+            for turn_line in planner._drone_routes():
+                print(turn_line)
+        except KeyboardInterrupt:
+            print("\n[Simulation interrupted by user]", file=sys.stderr)
+            sys.exit(130)
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)
             sys.exit(1)

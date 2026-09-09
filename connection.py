@@ -103,5 +103,5 @@ class Connection():
                 except ValueError:
                     raise ValueError(
                         'max_link_capacity must be an '
-                        'integer between 1 and 100'
+                        'integer greater than or equal to 1'
                     )

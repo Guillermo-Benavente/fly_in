@@ -799,5 +799,8 @@ def main() -> None:
 if __name__ == '__main__':
     try:
         main()
+    except KeyboardInterrupt:
+        print("\n[Simulation interrupted by user]", file=sys.stderr)
+        sys.exit(130)
     except Exception as e:
         print(f'Error: {e}')
