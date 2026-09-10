@@ -50,14 +50,12 @@ def test_maps() -> None:
     for path in TypeMap.__members__.values():
         try:
             map_data: NetworkZone = Parser(f'./maps/{path}.txt').parser()
-            planner = RoutePlanner(map_data)
+            planner: RoutePlanner = RoutePlanner(map_data)
+            turns : int = 0
+            for _ in planner.drone_routes():
+                turns += 1
             ok: bool = all(
                 drone.current_zone == map_data.end
-                for drone
-                in planner.drone_list
-            )
-            turns: int = max(
-                (max(drone.route.keys()) + 1)
                 for drone
                 in planner.drone_list
             )
@@ -134,10 +132,10 @@ def run_interactive_menu() -> None:
                 ).parser()
                 planner = RoutePlanner(network_map)
                 print(f'\n--- Output para {selected_path} ---')
-                for turn_line in planner._drone_routes():
+                for turn_line in planner.drone_routes():
                     print(turn_line)
             except KeyboardInterrupt:
-                print("\n[Simulation interrupted by user]", file=sys.stderr)
+                print('\n[Simulation interrupted by user]', file=sys.stderr)
                 sys.exit(130)
             except Exception as e:
                 print(f'{TCC.RED}Error processing the map: {e}{TCC.RESET}')
@@ -159,11 +157,11 @@ def main() -> None:
     if len(sys.argv) == 2:
         try:
             network_map: NetworkZone = Parser(sys.argv[1]).parser()
-            planner = RoutePlanner(network_map)
-            for turn_line in planner._drone_routes():
+            planner: RoutePlanner = RoutePlanner(network_map)
+            for turn_line in planner.drone_routes():
                 print(turn_line)
         except KeyboardInterrupt:
-            print("\n[Simulation interrupted by user]", file=sys.stderr)
+            print('\n[Simulation interrupted by user]', file=sys.stderr)
             sys.exit(130)
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)

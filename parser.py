@@ -53,31 +53,36 @@ class Parser():
                 names/coordinates, or duplicated connections.
         """
         with open(self.file) as file:
-            lines: list[str] = [
-                line
-                for line
-                in file.readlines()
-                if not line.startswith('#') and line.strip()
-            ]
-            if not self.first_drones_line(lines):
-                raise ValueError(
-                    'The first line should be the number of drones.'
-                )
-            if not self.extreme_zones(lines):
-                raise ValueError('There must be an entrance and an exit.')
             drones: int | None = None
             start: Hub | None = None
             end: Hub | None = None
             hubs: list[Hub] = []
             connections: list[Connection] = []
+            lines: list[str] = file.readlines()
+            is_first_line: bool = True
             for num_line, line in enumerate(lines):
-                if line.strip() == '':
+                num_line += 2
+                if line.strip().startswith('#') or line.strip() == '':
                     continue
+                if is_first_line:
+                    if not self.first_drones_line(line):
+                        raise ValueError(
+                            f'Line {num_line}: '
+                            'The first line should be the number of drones.'
+                        )
+                    is_first_line = False
+                if not self.extreme_zones(lines):
+                    raise ValueError(
+                        f'Line {num_line}: '
+                        'There must be an entrance and an exit.'
+                    )
                 key, value = line.strip().split(':', 1)
                 net_hubs: list[Hub] = hubs + [start, end]
-                if net_hubs:
-                    hub_names: list[str] = [hub.name for hub in net_hubs]
-                    hub_coords: list[tuple[int, int]] = [
+                hub_names: list[str] = []
+                hub_coords: list[tuple[int, int]] = []
+                if (net_hubs and start is not None and end is not None):
+                    hub_names = [hub.name for hub in net_hubs]
+                    hub_coords = [
                         (hub.coord_x, hub.coord_y)for hub in net_hubs
                     ]
                 match key:
@@ -86,51 +91,51 @@ class Parser():
                             nb_dron: int = int(value.strip())
                             if drones is not None:
                                 raise ValueError(
+                                    f'Line {num_line}: '
                                     'Value of number drones already set.'
-                                    f'\nLine {num_line}: {line}'
                                 )
                             if nb_dron < 0:
                                 raise ValueError(
+                                    f'Line {num_line}: '
                                     'Invalid drone count, the number '
                                     'must be positive integer.'
-                                    f'\nLine {num_line}: {line}'
                                 )
                             elif nb_dron == 0:
                                 raise ValueError(
+                                    f'Line {num_line}: '
                                     'Invalid drone count, the number must '
                                     'be at least 1.'
-                                    f'\nLine {num_line}: {line}'
                                 )
                             drones = nb_dron
                         except ValueError as e:
                             if str(e):
                                 raise e
                             raise ValueError(
+                                f'Line {num_line}: '
                                 'The value of number drones must be an int.'
-                                f'\nLine {num_line}: {line}'
                             )
                     case TypeData.START_HUB | TypeData.END_HUB | TypeData.HUB:
                         data: dict[str, Any] = self.extract_data(value)
                         if len(data['values']) < 3:
                             raise ValueError(
+                                f'Line {num_line}: '
                                 'Hub line requires a name, '
                                 'X coordinate, and Y coordinate.'
-                                f'\nLine {num_line}: {line}'
                             )
                         name, x, y = data['values']
                         hub: Hub = Hub(name, x, y, data['metadata'])
                         if key == TypeData.START_HUB:
                             if start is not None:
                                 raise ValueError(
+                                    f'Line {num_line}: '
                                     'Value of start hub already set.'
-                                    f'\nLine {num_line}: {line}'
                                 )
                             start = hub
                         elif key == TypeData.END_HUB:
                             if end is not None:
                                 raise ValueError(
+                                    f'Line {num_line}: '
                                     'Value of end hub already set.'
-                                    f'\nLine {num_line}: {line}'
                                 )
                             end = hub
                         else:
@@ -139,9 +144,9 @@ class Parser():
                         data = self.extract_data(value)
                         if start is None or end is None:
                             raise ValueError(
+                                f'Line {num_line}: '
                                 'Start and end hubs must be '
                                 'defined before connections.'
-                                f'\nLine {num_line}: {line}'
                             )
                         connections.append(
                             Connection(
@@ -152,13 +157,13 @@ class Parser():
                 if net_hubs:
                     if len(hub_names) != len(set(hub_names)):
                         raise ValueError(
+                            f'Line {num_line}: '
                             'All zones must have unique names.'
-                            f'\nLine {num_line}: {line}'
                         )
                     if len(hub_coords) != len(set(hub_coords)):
                         raise ValueError(
+                            f'Line {num_line}: '
                             'All zones must have unique coords.'
-                            f'\nLine {num_line}: {line}'
                         )
                 if connections:
                     net_connections: list[tuple[str, str]] = [
@@ -169,26 +174,28 @@ class Parser():
                         for connection in connections
                     ]
                     if len(net_connections) != len(set(net_connections)):
-                        raise ValueError('All connections must have unique.')
-            network_zone: NetworkZone = NetworkZone(
+                        raise ValueError(
+                            f'Line {num_line}: '
+                            'All connections must have unique.'
+                        )
+            return NetworkZone(
                 drones, start, end, hubs, connections
             )
-            return network_zone
 
-    def first_drones_line(self, lines: list[str]) -> bool:
+    def first_drones_line(self, line: str) -> bool:
         """Verifies if the specified lines list starts with the drone count
         directive.
 
         Args:
-            lines (list[str]): List of configuration file lines.
+            lines (str): List of configuration file lines.
 
         Returns:
             bool: True if the first line contains the NUMBER_DRONES key,
                 False otherwise.
         """
-        if not lines:
+        if not line:
             return False
-        elif TypeData.NUMBER_DRONES in lines[0]:
+        elif TypeData.NUMBER_DRONES in line:
             return True
         else:
             return False

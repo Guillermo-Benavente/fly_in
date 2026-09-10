@@ -51,7 +51,7 @@ class RoutePlanner():
             list_drones.append(drone)
         return list_drones
 
-    def _drone_routes(self) -> Generator[str, None, None]:
+    def drone_routes(self) -> Generator[str, None, None]:
         """Simulates iterative movements for all drones until
         reaching destination.
 
