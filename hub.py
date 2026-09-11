@@ -117,7 +117,8 @@ class Hub():
         name: str,
         coord_x: str,
         coord_y: str,
-        metadata: dict[str, Any]
+        metadata: dict[str, Any],
+        line: int
     ) -> None:
         """Initializes a Hub instance after validating name, coordinates,
         and metadata.
@@ -132,7 +133,7 @@ class Hub():
             ValueError: If name syntax, coordinates,
                 or metadata fail validation rules.
         """
-        self.parser(name, coord_x, coord_y, metadata)
+        self.parser(name, coord_x, coord_y, metadata, line)
         self.name = name
         self.coord_x = int(coord_x)
         self.coord_y = int(coord_y)
@@ -144,7 +145,8 @@ class Hub():
         name: str,
         coord_x: str,
         coord_y: str,
-        metadata: dict[str, Any]
+        metadata: dict[str, Any],
+        line: int
     ) -> None:
         """Validates naming constraints, integer coordinate parsing,
         and metadata key/values.
@@ -163,28 +165,41 @@ class Hub():
         """
         if ' ' in name or '-' in name:
             raise ValueError(
+                f'Line {line}: '
                 f'The name “{name}” cannot contain spaces or dashes'
             )
         try:
             int(coord_x)
         except ValueError:
-            raise ValueError('The x coordinate must be an integer')
+            raise ValueError(
+                f'Line {line}: '
+                'The x coordinate must be an integer'
+            )
         try:
             int(coord_y)
         except ValueError:
-            raise ValueError('The y coordinate must be an integer')
+            raise ValueError(
+                f'Line {line}: '
+                'The y coordinate must be an integer'
+            )
         for data in metadata:
             match data:
                 case TypeMetadata.ZONE:
                     try:
                         TypeZone(metadata[data])
                     except ValueError:
-                        raise ValueError('Invalid zone')
+                        raise ValueError(
+                            f'Line {line}: '
+                            'Invalid zone'
+                        )
                 case TypeMetadata.COLOR:
                     try:
                         TypeColor(metadata[data])
                     except ValueError:
-                        raise ValueError('Invalid color')
+                        raise ValueError(
+                            f'Line {line}: '
+                            'Invalid color'
+                        )
                 case TypeMetadata.MAX_DRONES:
                     try:
                         max_drones: int = int(metadata[data])
@@ -192,11 +207,13 @@ class Hub():
                             raise ValueError
                     except ValueError:
                         raise ValueError(
+                            f'Line {line}: '
                             'max_drones must be an integer '
                             'greater than or equal to 1'
                         )
                 case _:
                     raise ValueError(
+                        f'Line {line}: '
                         f'That metadata {data} is not valid for the Hub'
                     )
 

@@ -33,7 +33,8 @@ class Connection():
         self,
         connection: str,
         metadata: dict[str, Any],
-        hubs: list[Hub]
+        hubs: list[Hub],
+        line: int
     ) -> None:
         """Initializes a Connection instance after validation.
 
@@ -47,7 +48,7 @@ class Connection():
         Raises:
             ValueError: If connection syntax, hubs, or metadata are invalid.
         """
-        self.parser(connection, metadata, hubs)
+        self.parser(connection, metadata, hubs, line)
         init_hub, final_hub = connection.split('-')
         self.name = connection
         self.metadata = metadata
@@ -61,7 +62,8 @@ class Connection():
     def parser(
         connection: str,
         metadata: dict[str, Any],
-        hubs: list[Hub]
+        hubs: list[Hub],
+        line: int
     ) -> None:
         """Validates connection syntax, hub existence, and metadata parameters.
 
@@ -78,21 +80,29 @@ class Connection():
         """
         parts: list[str] = connection.split('-')
         if len(parts) != 2 or any(' ' in p for p in parts):
-            raise ValueError(f'Invalid connection syntax: {connection}')
+            raise ValueError(
+                f'Line {line}: '
+                f'Invalid connection syntax: {connection}'
+            )
         init_hub, final_hub = parts
         if init_hub == final_hub:
-            raise ValueError(f'Duplicate connection: {connection}')
+            raise ValueError(
+                f'Line {line}: '
+                f'Duplicate connection: {connection}'
+            )
         existing_hub_names: set[str] = {hub.name for hub in hubs}
         if (
             init_hub not in existing_hub_names
             or final_hub not in existing_hub_names
         ):
             raise ValueError(
+                f'Line {line}: '
                 f'Hubs must exist to create a connection "{connection}"'
             )
         for data in metadata:
             if data != 'max_link_capacity':
                 raise ValueError(
+                    f'Line {line}: '
                     f'That metadata {data} is not valid for the Connection'
                 )
             else:
@@ -102,6 +112,7 @@ class Connection():
                         raise ValueError
                 except ValueError:
                     raise ValueError(
+                        f'Line {line}: '
                         'max_link_capacity must be an '
                         'integer greater than or equal to 1'
                     )
