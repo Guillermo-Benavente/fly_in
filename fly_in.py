@@ -6,6 +6,8 @@ test suites across preset benchmark maps, and launch an interactive
 terminal menu.
 """
 import sys
+import os
+import shutil
 from hub import TypeConsoleColor as TCC
 from network_zone import NetworkZone
 from parser import Parser
@@ -160,6 +162,36 @@ def main() -> None:
             planner: RoutePlanner = RoutePlanner(network_map)
             for turn_line in planner.drone_routes():
                 print(turn_line)
+        except KeyboardInterrupt:
+            print('\n[Simulation interrupted by user]', file=sys.stderr)
+            sys.exit(130)
+        except Exception as e:
+            print(f'Error: {e}', file=sys.stderr)
+            sys.exit(1)
+    elif len(sys.argv) == 3 and '--visual' in sys.argv:
+        try:
+            args: list[str] = sys.argv
+            args.remove('--visual')
+            network_map: NetworkZone = Parser(args[1]).parser()
+            planner: RoutePlanner = RoutePlanner(network_map)
+            chunks_dir = './output/chunks'
+            if os.path.exists(chunks_dir) and os.path.isdir(chunks_dir):
+                shutil.rmtree(chunks_dir)
+            os.makedirs(chunks_dir, exist_ok=True)
+            chunks: int = 0
+            lines: int = 0
+            file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'wt')
+            for turn_line in planner.drone_routes(True):
+                print(turn_line)
+                file.write(f"{turn_line}\n")
+                lines += 1
+                if lines == 50:
+                    file.close()
+                    chunks += 1
+                    lines = 0
+                    file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'w')
+            file.close()
+                    
         except KeyboardInterrupt:
             print('\n[Simulation interrupted by user]', file=sys.stderr)
             sys.exit(130)

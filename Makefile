@@ -16,7 +16,7 @@ install:
 	@echo "Done."
 
 run:
-	@$(PYTHON) fly_in.py $(MAP)
+	@$(PYTHON) fly_in.py $(MAP) $(FLAG)
 
 debug:
 	@$(PYTHON) -m pdb fly_in.py $(MAP)
@@ -36,13 +36,8 @@ lint-strict:
 visual:
 	@mkdir -p output
 	@for map_file in $(TARGET_MAPS); do \
-		if [ ! -f "$$map_file" ]; then \
-			echo "Error: Map file '$$map_file' not found." >&2; \
-			exit 1; \
-		fi; \
 		base_name=$$(basename "$$map_file" .txt); \
-		echo "Generating output/$$base_name.html from $$map_file ..."; \
-		$(PYTHON) visualizer.py "$$map_file" "output/$$base_name.html"; \
+		$(PYTHON) visualizer.py maps/$$map_file.txt output/$$base_name.html; \
 	done
 
 .PHONY: install run debug clean lint lint-strict visual

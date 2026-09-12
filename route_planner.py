@@ -51,7 +51,7 @@ class RoutePlanner():
             list_drones.append(drone)
         return list_drones
 
-    def drone_routes(self) -> Generator[str, None, None]:
+    def drone_routes(self, is_visual: bool = False) -> Generator[str, None, None]:
         """Simulates iterative movements for all drones until
         reaching destination.
 
@@ -94,10 +94,13 @@ class RoutePlanner():
             for index, drone in enumerate(active):
                 action: str = self._move_drone(index, drone, iteration_route)
                 if action and action != drone.previous_zone:
-                    colored_value = self._format_node_color(
-                        action, hubs_by_name.get(action)
-                    )
-                    turn_movements.append(f'D{drone.id}-{colored_value}')
+                    if is_visual:
+                        turn_movements.append(f'D{drone.id}-{action}')
+                    else:
+                        colored_value = self._format_node_color(
+                            action, hubs_by_name.get(action)
+                        )
+                        turn_movements.append(f'D{drone.id}-{colored_value}')
             if turn_movements:
                 yield ' '.join(turn_movements)
             iteration += 1
