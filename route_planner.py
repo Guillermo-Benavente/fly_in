@@ -26,23 +26,20 @@ class RoutePlanner():
     drone_list: list[Drone]
 
     def __init__(self, network_zone: NetworkZone) -> None:
-        """Initializes the RoutePlanner, instantiates drones,
-        and computes routes.
+        """Initialize the RoutePlanner and create the drone fleet.
 
         Args:
-            network_zone (NetworkZone): The network graph environment
-                for drone routing.
+            network_zone: Network graph environment used for drone routing.
         """
         self.network_zone = network_zone
         self.mapper = Mapper(network_zone)
         self.drone_list = self._create_drones()
 
     def _create_drones(self) -> list[Drone]:
-        """Instantiates all drones assigned to the network and places them
-        at start.
+        """Create all drones assigned to the network at the start hub.
 
         Returns:
-            list[Drone]: A list of newly created Drone instances.
+            List of newly created Drone instances.
         """
         list_drones: list[Drone] = []
         for id in range(self.network_zone.drones):
@@ -51,19 +48,30 @@ class RoutePlanner():
             list_drones.append(drone)
         return list_drones
 
-    def drone_routes(self, is_visual: bool = False) -> Generator[str, None, None]:
-        """Simulates iterative movements for all drones until
-        reaching destination.
+    def drone_routes(
+        self,
+        is_visual: bool = False
+    ) -> Generator[str, None, None]:
+        """Generate drone movements until all drones reach the destination.
+
+        Args:
+            is_visual: Whether to format movements for visual output.
+
+        Yields:
+            A space-separated string containing the movements performed during
+            each iteration.
 
         Raises:
-            RuntimeError: If the iteration count exceeds safety bounds,
-                indicating a deadlock.
+            RuntimeError: If the maximum number of iterations is exceeded,
+                indicating that one or more drones are stuck in a loop.
         """
         start_cost: int = (
             self.mapper.nodes[self.network_zone.start.name].remaining_cost
         )
         max_iterations: int = start_cost * self.network_zone.drones
-        hubs_by_name: dict[str, Hub] = {h.name: h for h in self.network_zone.all_hubs()}
+        hubs_by_name: dict[str, Hub] = {
+            h.name: h for h in self.network_zone.all_hubs()
+        }
         iteration: int = 0
         while any(
             drone.current_zone != self.network_zone.end
@@ -92,7 +100,9 @@ class RoutePlanner():
             iteration_route: dict[str, int] = {}
             turn_movements: list[str] = []
             for index, drone in enumerate(active):
-                action: str = self._move_drone(index, drone, iteration_route)
+                action: str | None = self._move_drone(
+                    index, drone, iteration_route
+                )
                 if action and action != drone.previous_zone:
                     if is_visual:
                         turn_movements.append(f'D{drone.id}-{action}')
@@ -111,15 +121,16 @@ class RoutePlanner():
         drone: Drone,
         iteration_route: dict[str, int]
     ) -> str | None:
-        """Executes a single step or transit delay for an individual drone.
+        """Move a drone to the best available neighboring node.
 
         Args:
-            drone_position (int):
-                Index position of the drone in the active queue.
-            drone (Drone): The target drone being moved.
-            iteration_route (dict[str, int]):
-                Tracked connection usage for current turn.
-            iteration (int): Current simulation step index.
+            drone_position: Current position of the drone in the turn sequence.
+            drone: Drone to move.
+            iteration_route: Connection passage counts for the current turn.
+
+        Returns:
+            The movement destination name, connection name, or None if the
+            drone cannot move.
         """
         if drone.in_transit:
             drone.in_transit = False
@@ -152,15 +163,15 @@ class RoutePlanner():
             return action_name
 
     def _get_connection_name(self, hub_a: str, hub_b: str) -> str:
-        """Retrieves the explicit name of a connection between two hubs.
+        """Get the explicit connection name between two hubs.
 
         Args:
-            hub_a (str): Name of the first hub.
-            hub_b (str): Name of the second hub.
+            hub_a: Name of the first hub.
+            hub_b: Name of the second hub.
 
         Returns:
-            str: Custom connection name if defined,
-                otherwise formatted connection key.
+            The custom connection name if defined, otherwise the canonical
+            connection key.
         """
         for conn in self.network_zone.connections:
             if conn.init_hub.name == hub_a and conn.final_hub.name == hub_b:
@@ -175,19 +186,16 @@ class RoutePlanner():
         drone: Drone,
         iteration_route: dict[str, int]
     ) -> MapNode:
-        """Finds valid adjacent neighbor nodes adhering
-        to capacity constraints.
+        """Find the best valid neighboring node for a drone.
 
         Args:
-            drone_position (int):
-                Current index of the drone within the turn sequence.
-            drone (Drone): The drone attempting to move.
-            iteration_route (dict[str, int]):
-                Connection passage counts for current turn.
+            drone_position: Current position of the drone in the turn sequence.
+            drone: Drone attempting to move.
+            iteration_route: Connection passage counts for the current turn.
 
         Returns:
-            MapNode: Selected optimal neighbor node,
-                or current node if no moves are available.
+            The selected optimal neighboring node, or the current node if no
+            valid move is available.
         """
         current_node: MapNode = self.mapper.nodes[drone.current_zone.name]
         valid_nodes: list[MapNode] = []
@@ -211,17 +219,16 @@ class RoutePlanner():
         valid_nodes: list[MapNode],
         current_node: MapNode
     ) -> MapNode:
-        """Selects the best destination node using cost heuristics
-        and priority counts.
+        """Select the best node using cost and priority heuristics.
 
         Args:
-            drone_position (int):
-                Position index used for tie-breaking/margin calculations.
-            valid_nodes (list[MapNode]): Candidate adjacent nodes.
-            current_node (MapNode): Current node location of the drone.
+            drone_position:
+                Position used for tie-breaking and margin calculations.
+            valid_nodes: Candidate neighboring nodes.
+            current_node: Current node of the drone.
 
         Returns:
-            MapNode: The best evaluated MapNode for the drone to navigate to.
+            The best evaluated node for the drone to navigate to.
         """
         is_even = (drone_position % 2 == 0)
         margin = 0 if is_even else (drone_position // 2)
@@ -245,14 +252,14 @@ class RoutePlanner():
         return current_node
 
     def _is_valid_neighbor(self, neighbor: MapNode) -> bool:
-        """Validates if a neighbor node can receive additional drones.
+        """Check whether a neighboring node can receive another drone.
 
         Args:
-            neighbor (MapNode): Neighbor node to evaluate.
+            neighbor: Neighboring node to evaluate.
 
         Returns:
-            bool: True if the node is accessible and under capacity,
-                False otherwise.
+            True if the node is accessible and has available capacity,
+            otherwise False.
         """
         if neighbor.hub.metadata.get(TMHub.ZONE) == TypeZone.BLOCKED:
             return False
@@ -268,15 +275,15 @@ class RoutePlanner():
         return True
 
     def _format_node_color(self, value: str, hub: Hub | None) -> str:
-        """Applies ANSI color formatting to a node name based on hub metadata.
+        """Apply ANSI color formatting to a node name.
 
         Args:
-            value (str): The node name or label to format.
-            hub (Hub | None): The hub instance containing color metadata.
+            value: Node name or label to format.
+            hub: Hub containing the color metadata.
 
         Returns:
-            str: The color-formatted node string, or original value if no color
-                metadata is present or valid.
+            The color-formatted node string, or the original value when
+            no valid color metadata is available.
         """
         if not hub or TMHub.COLOR not in hub.metadata:
             return value

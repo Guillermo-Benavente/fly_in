@@ -29,10 +29,10 @@ class MapNode:
     priority_count: int
 
     def __init__(self, hub: Hub) -> None:
-        """Initializes a MapNode wrapping the target Hub.
+        """Initialize a MapNode wrapping a Hub instance.
 
         Args:
-            hub (Hub): The Hub instance represented by this node.
+            hub: Hub instance represented by this node.
         """
         self.hub = hub
         self.remaining_cost = -1
@@ -56,12 +56,10 @@ class Mapper:
     connection_capacity: dict[str, int]
 
     def __init__(self, network_zone: NetworkZone) -> None:
-        """Builds graph nodes and connections from a given
-        NetworkZone topology.
+        """Build the graph structure from a network zone.
 
         Args:
-            network_zone (NetworkZone):
-                Network topology containing hubs and connections.
+            network_zone: Network topology containing hubs and connections.
         """
         self.nodes = {}
         self.connection_capacity = {}
@@ -85,14 +83,14 @@ class Mapper:
         self._calculate_priority_counts()
 
     def _calculate_remaining_costs(self, end_hub_name: str) -> None:
-        """Computes shortest turn costs from all accessible nodes
+        """Calculate the minimum traversal cost from each accessible node
         to the destination.
 
-        Uses Breadth-First Search (BFS) starting from the destination
-        hub backwards, skipping restricted hubs with a turn cost of -1.
+        The calculation uses Breadth-First Search starting from the destination
+        hub and skips blocked hubs.
 
         Args:
-            end_hub_name (str): Identifier of the destination hub.
+            end_hub_name: Name of the destination hub.
         """
         end_node: MapNode = self.nodes[end_hub_name]
         end_node.remaining_cost = 0
@@ -114,10 +112,10 @@ class Mapper:
                     neighbor_queue.append(neighbor_hub)
 
     def _calculate_priority_counts(self) -> None:
-        """Calculates cumulative priority hub bonuses along optimal paths.
+        """Calculate cumulative priority-zone counts along optimal paths.
 
-        Traverses nodes sorted by remaining cost to maximize priority
-        hub counts for drones choosing between equal-cost paths.
+        Nodes are processed by remaining cost to determine the maximum number
+        of priority zones available among equal-cost paths.
         """
         sorted_nodes: list[MapNode] = sorted(
             self.nodes.values(),
@@ -142,14 +140,13 @@ class Mapper:
 
     @staticmethod
     def connection_key(current_hub: str, next_hub: str) -> str:
-        """Generates a canonical, order-independent lookup key for
-        an edge between two hubs.
+        """Generate a canonical, order-independent key for a hub connection.
 
         Args:
-            current_hub (str): Name of the first hub.
-            next_hub (str): Name of the second hub.
+            current_hub: Name of the first hub.
+            next_hub: Name of the second hub.
 
         Returns:
-            str: Alphabetically ordered edge identifier (e.g., 'hubA-hubB').
+            Alphabetically ordered connection identifier.
         """
         return f'{min(current_hub, next_hub)}-{max(current_hub, next_hub)}'

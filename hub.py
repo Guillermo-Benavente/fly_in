@@ -68,15 +68,13 @@ class TypeConsoleColor(StrEnum):
 
     @classmethod
     def rainbow(cls, text: str) -> str:
-        """Applies a multi-color rainbow gradient
-        across individual characters of text.
+        """Apply a cyclic rainbow color effect to each character in the text.
 
         Args:
-            text (str): The input text string to format with rainbow colors.
+            text: Input text to format with rainbow colors.
 
         Returns:
-            str: An ANSI-formatted string with cyclic rainbow coloring
-                per character.
+            An ANSI-formatted string with cyclic rainbow coloring.
         """
         palette: list[str] = [
             cls.RED,
@@ -120,18 +118,17 @@ class Hub():
         metadata: dict[str, Any],
         line: int
     ) -> None:
-        """Initializes a Hub instance after validating name, coordinates,
-        and metadata.
+        """Initialize a Hub instance after validating its data.
 
         Args:
-            name (str): Hub name identifier.
-            coord_x (str): X coordinate represented as a string.
-            coord_y (str): Y coordinate represented as a string.
-            metadata (dict[str, Any]): Configuration parameters for the hub.
+            name: Hub name identifier.
+            coord_x: X coordinate represented as a string.
+            coord_y: Y coordinate represented as a string.
+            metadata: Configuration parameters for the hub.
+            line: Source line number used in validation error messages.
 
         Raises:
-            ValueError: If name syntax, coordinates,
-                or metadata fail validation rules.
+            ValueError: If the name, coordinates, or metadata fail validation.
         """
         self.parser(name, coord_x, coord_y, metadata, line)
         self.name = name
@@ -148,20 +145,18 @@ class Hub():
         metadata: dict[str, Any],
         line: int
     ) -> None:
-        """Validates naming constraints, integer coordinate parsing,
-        and metadata key/values.
+        """Validate hub naming, coordinates, and metadata.
 
         Args:
-            name (str): Hub name string to check.
-            coord_x (str): Raw string input for X coordinate.
-            coord_y (str): Raw string input for Y coordinate.
-            metadata (dict[str, Any]): Dictionary containing
-                metadata to validate.
+            name: Hub name to validate.
+            coord_x: Raw X coordinate input.
+            coord_y: Raw Y coordinate input.
+            metadata: Hub metadata to validate.
+            line: Source line number used in validation error messages.
 
         Raises:
-            ValueError: If the name contains spaces/dashes, coordinates
-                are non-integers, or metadata keys and values do not
-                conform to allowed enumerations and limits.
+            ValueError: If the name, coordinates, or metadata do not meet
+                the required validation rules.
         """
         if ' ' in name or '-' in name:
             raise ValueError(
@@ -218,12 +213,11 @@ class Hub():
                     )
 
     def get_turn_zone(self) -> int:
-        """Determines the turn duration cost required to navigate through this
-            hub's zone type.
+        """Determine the turn cost associated with the hub's zone type.
 
         Returns:
-            int: Turn cost based on zone type
-                (1 for normal/priority, 2 for restricted, -1 for blocked).
+            The turn cost: 1 for normal or priority zones, 2 for restricted
+            zones, and -1 for blocked zones.
         """
         match self.metadata.get(TypeMetadata.ZONE):
             case TypeZone.NORMAL:

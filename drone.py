@@ -23,11 +23,11 @@ class Drone():
     in_transit: bool
 
     def __init__(self, id: int, current_zone: Hub):
-        """Initializes a new Drone instance.
+        """Initialize a new Drone instance.
 
         Args:
-            id (int): Unique identifier for the drone.
-            current_zone (Hub): The initial starting hub for the drone.
+            id: Unique identifier for the drone.
+            current_zone: Initial starting hub for the drone.
         """
         self.id = id
         self.current_zone = current_zone

@@ -5,7 +5,7 @@ MAPS   := easy/01_linear_path easy/02_simple_fork easy/03_basic_capacity \
           medium/01_dead_end_trap medium/02_circular_loop medium/03_priority_puzzle \
           hard/01_maze_nightmare hard/02_capacity_hell hard/03_ultimate_challenge \
           challenger/01_the_impossible_dream
-TARGET_MAPS := $(if $(MAP),$(MAP),$(MAPS))
+TARGET_MAPS := $(if $(MAP),$(MAP),$(addprefix maps/,$(addsuffix .txt,$(MAPS))))
 
 install:
 	@echo "Setting up virtual environment..."
@@ -37,7 +37,7 @@ visual:
 	@mkdir -p output
 	@for map_file in $(TARGET_MAPS); do \
 		base_name=$$(basename "$$map_file" .txt); \
-		$(PYTHON) visualizer.py maps/$$map_file.txt output/$$base_name.html; \
+		$(PYTHON) visualizer.py $$map_file output/$$base_name.html; \
 	done
 
 .PHONY: install run debug clean lint lint-strict visual

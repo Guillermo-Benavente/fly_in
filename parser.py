@@ -28,29 +28,25 @@ class Parser():
     file: str
 
     def __init__(self, file: str) -> None:
-        """Initializes the Parser instance with a target file path.
+        """Initialize the Parser instance with a target file path.
 
         Args:
-            file (str): Path to the network configuration file.
+            file: Path to the network configuration file.
         """
         self.file = file
 
     def parser(self) -> NetworkZone:
-        """Reads, validates, and builds a complete NetworkZone object
-        from the file.
+        """Read, validate, and build a complete NetworkZone from the file.
 
-        Parses line by line, creating start, end, and intermediate hubs as well
-        as verifying connection uniqueness, node coordinate integrity,
-        and name conflicts.
+        The parser processes the file line by line, creating the start, end,
+        and intermediate hubs while validating connections, coordinates,
+        and name uniqueness.
 
         Returns:
-            NetworkZone:
-                Fully instantiated and validated network topology object.
+            A fully instantiated and validated network topology.
 
         Raises:
-            ValueError: If file content violates syntax rules,
-                missing required hubs, contains duplicated hub
-                names/coordinates, or duplicated connections.
+            ValueError: If the file content violates syntax or topology rules.
         """
         with open(self.file) as file:
             drones: int | None = None
@@ -78,9 +74,14 @@ class Parser():
                     )
                 try:
                     key, value = line.strip().split(':', 1)
-                except:
+                except ValueError:
                     raise ValueError(f'Line {num_line}: Invalid line.')
-                net_hubs: list[Hub] = [hub for hub in hubs + [start, end] if hub is not None]
+                net_hubs: list[Hub] = [
+                    hub
+                    for hub
+                    in hubs + [start, end]
+                    if hub is not None
+                ]
                 hub_names: list[str] = []
                 hub_coords: list[tuple[int, int]] = []
                 match key:
@@ -111,7 +112,9 @@ class Parser():
                             )
                         drones = nb_dron
                     case TypeData.START_HUB | TypeData.END_HUB | TypeData.HUB:
-                        data: dict[str, Any] = self.extract_data(value, num_line)
+                        data: dict[str, Any] = self.extract_data(
+                            value, num_line
+                        )
                         if len(data['values']) < 3:
                             raise ValueError(
                                 f'Line {num_line}: '
@@ -163,8 +166,14 @@ class Parser():
                 if connections:
                     net_connections: list[tuple[str, str]] = [
                         (
-                            min(connection.init_hub.name, connection.final_hub.name),
-                            max(connection.init_hub.name, connection.final_hub.name)
+                            min(
+                                connection.init_hub.name,
+                                connection.final_hub.name
+                            ),
+                            max(
+                                connection.init_hub.name,
+                                connection.final_hub.name
+                            )
                         )
                         for connection in connections
                     ]
@@ -178,20 +187,25 @@ class Parser():
                     f'Line {num_line + 1 if num_line > 0 else 1}: '
                     'The first line should be the number of drones.'
                 )
-            return NetworkZone(
-                drones, start, end, hubs, connections
-            )
+            if drones and start and end:
+                return NetworkZone(
+                    drones, start, end, hubs, connections
+                )
+            else:
+                raise ValueError(
+                    f'Line {num_line + 1 if num_line > 0 else 1}: '
+                    'The number of drones and the start and end hubs '
+                    'must be instantiated'
+                )
 
     def first_drones_line(self, line: str) -> bool:
-        """Verifies if the specified lines list starts with the drone count
-        directive.
+        """Check whether a line contains the drone count directive.
 
         Args:
-            lines (str): List of configuration file lines.
+            line: Configuration file line to validate.
 
         Returns:
-            bool: True if the first line contains the NUMBER_DRONES key,
-                False otherwise.
+            True if the line contains the NUMBER_DRONES key, otherwise False.
         """
         if not line:
             return False
@@ -221,19 +235,18 @@ class Parser():
             return False
 
     def extract_data(self, crude_data: str, num_line: int) -> dict[str, Any]:
-        """Splits raw hub or connection line strings into arguments
-        and metadata dictionaries.
+        """Split a raw hub or connection line into values and metadata.
 
         Args:
-            crude_data (str): Unparsed value portion of a configuration line.
+            crude_data: Unparsed value portion of a configuration line.
+            num_line: Source line number used in validation error messages.
 
         Returns:
-            dict[str, Any]: Dictionary containing 'values' list and
-                'metadata' dict.
+            A dictionary containing the parsed values and metadata.
 
         Raises:
-            ValueError: If parameters are missing before metadata or if
-                more than one metadata block (`[...]`) is detected.
+            ValueError: If parameters are missing before metadata or more than
+                one metadata block is detected.
         """
         if crude_data.strip().startswith('['):
             raise ValueError(
@@ -272,17 +285,18 @@ class Parser():
         }
 
     def metadata_valid(self, metadata: str, num_line: int) -> dict[str, Any]:
-        """Parses key-value metadata strings inside square brackets
-        into a dictionary.
+        """Parse key-value metadata into a dictionary.
 
         Args:
-            metadata (str): Raw string of key=value pairs separated by spaces.
+            metadata: Raw key-value pairs separated by spaces.
+            num_line: Source line number used in validation error messages.
 
         Returns:
-            dict[str, Any]: Key-value mappings of parsed metadata attributes.
+            A dictionary containing the parsed metadata mappings.
 
         Raises:
-            ValueError: If a pair lacks a key or value around the equals sign.
+            ValueError: If a metadata pair does not contain a valid key-value
+                assignment.
         """
         metadata_valid: dict[str, Any] = {}
         for data in metadata.split(' '):

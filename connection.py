@@ -36,17 +36,17 @@ class Connection():
         hubs: list[Hub],
         line: int
     ) -> None:
-        """Initializes a Connection instance after validation.
+        """Initialize a Connection instance after validation.
 
         Args:
-            connection (str): Connection string using 'StartHub-EndHub' syntax.
-            metadata (dict[str, Any]):
-                Dictionary containing connection metadata.
-            hubs (list[Hub]):
-                List of existing network hubs to bind with the connection.
+            connection: Connection string using ``StartHub-EndHub`` syntax.
+            metadata: Dictionary containing connection metadata.
+            hubs: List of existing network hubs to bind with the connection.
+            line: Source line number used in validation error messages.
 
         Raises:
-            ValueError: If connection syntax, hubs, or metadata are invalid.
+            ValueError: If the connection syntax, hubs, or metadata are
+            invalid.
         """
         self.parser(connection, metadata, hubs, line)
         init_hub, final_hub = connection.split('-')
@@ -65,18 +65,17 @@ class Connection():
         hubs: list[Hub],
         line: int
     ) -> None:
-        """Validates connection syntax, hub existence, and metadata parameters.
+        """Validate connection syntax, hub existence, and metadata parameters.
 
         Args:
-            connection (str): Connection string formatted as 'StartHub-EndHub'.
-            metadata (dict[str, Any]): Metadata dictionary to check.
-            hubs (list[Hub]): List of registered hubs in the system.
+            connection: Connection string formatted as ``StartHub-EndHub``.
+            metadata: Dictionary containing connection metadata to validate.
+            hubs: List of registered hubs in the network.
+            line: Source line number used in validation error messages.
 
         Raises:
-            ValueError:
-                If connection syntax is invalid, any hub does not exist,
-                or metadata contains unknown keys or non-positive
-                integer values.
+            ValueError: If the connection syntax is invalid, a hub does not
+                exist, or metadata contains unknown keys or invalid values.
         """
         parts: list[str] = connection.split('-')
         if len(parts) != 2 or any(' ' in p for p in parts):

@@ -30,10 +30,11 @@ class TypeMap(StrEnum):
 
 
 def test_maps() -> None:
-    """Executes route planning test suite over all predefined maps.
+    """Run the route planning test suite for all predefined maps.
 
-    Evaluates whether all drones successfully reach the destination hub and
-    compares total simulation turns against benchmark targets.
+    Each map is evaluated by checking whether all drones reach the
+    destination and whether the number of simulation turns meets the
+    predefined performance target.
     """
     targets: dict[str, int] = {
         TypeMap.EASY_01: 6,
@@ -53,7 +54,7 @@ def test_maps() -> None:
         try:
             map_data: NetworkZone = Parser(f'./maps/{path}.txt').parser()
             planner: RoutePlanner = RoutePlanner(map_data)
-            turns : int = 0
+            turns: int = 0
             for _ in planner.drone_routes():
                 turns += 1
             ok: bool = all(
@@ -88,7 +89,7 @@ def test_maps() -> None:
 
 
 def print_options() -> None:
-    """Displays formatted color-coded CLI legend and menu options."""
+    """Display the color-coded CLI legend and available map options."""
     print(TCC.CYAN)
     print('+----------Legend----------+')
     print(
@@ -112,8 +113,11 @@ def print_options() -> None:
 
 
 def run_interactive_menu() -> None:
-    """Runs interactive CLI loop for selecting, parsing,
-    and executing map simulations."""
+    """Run the interactive CLI menu for selecting and simulating maps.
+
+    The menu repeatedly displays the available maps, executes the selected
+    simulation, and waits for user input before returning to the menu.
+    """
     map_options: dict[str, TypeMap] = {
         str(i): map_enum
         for i, map_enum
@@ -154,8 +158,15 @@ def run_interactive_menu() -> None:
 
 
 def main() -> None:
-    """Parses command-line arguments and routes execution to single mode
-    or interactive CLI."""
+    """Run the drone routing planner from the command line.
+
+    Supports three execution modes: single-map simulation, visual
+    simulation with chunked output, and the interactive map selection menu.
+
+    Raises:
+        SystemExit: If a simulation is interrupted, fails, or invalid
+            command-line arguments are provided.
+    """
     if len(sys.argv) == 2:
         try:
             network_map: NetworkZone = Parser(sys.argv[1]).parser()
@@ -172,8 +183,8 @@ def main() -> None:
         try:
             args: list[str] = sys.argv
             args.remove('--visual')
-            network_map: NetworkZone = Parser(args[1]).parser()
-            planner: RoutePlanner = RoutePlanner(network_map)
+            network_map = Parser(args[1]).parser()
+            planner = RoutePlanner(network_map)
             chunks_dir = './output/chunks'
             if os.path.exists(chunks_dir) and os.path.isdir(chunks_dir):
                 shutil.rmtree(chunks_dir)
@@ -181,7 +192,13 @@ def main() -> None:
             chunks: int = 0
             lines: int = 0
             file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'wt')
-            for turn_line in planner.drone_routes(True):
+            for index, turn_line in enumerate(planner.drone_routes(True)):
+                if lines == 0:
+                    file.write(
+                        f'# map={args[1]} '
+                        f'chunk={chunks} '
+                        f'start_turn={index}\n'
+                    )
                 print(turn_line)
                 file.write(f"{turn_line}\n")
                 lines += 1
@@ -191,7 +208,6 @@ def main() -> None:
                     lines = 0
                     file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'w')
             file.close()
-                    
         except KeyboardInterrupt:
             print('\n[Simulation interrupted by user]', file=sys.stderr)
             sys.exit(130)

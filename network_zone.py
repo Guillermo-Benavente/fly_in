@@ -34,15 +34,14 @@ class NetworkZone():
         hubs: list[Hub],
         connections: list[Connection]
     ) -> None:
-        """Initializes a NetworkZone instance with all required attributes.
+        """Initialize a NetworkZone instance with its network components.
 
         Args:
-            drones (int): Total count of drones assigned to the network.
-            start (Hub): Starting origin hub for drone navigation.
-            end (Hub): Destination hub for drone arrivals.
-            hubs (list[Hub]): Collection of intermediate network hubs.
-            connections (list[Connection]):
-                List of connections linking hubs together.
+            drones: Total number of drones assigned to the network.
+            start: Starting hub for drone navigation.
+            end: Destination hub for drone arrivals.
+            hubs: Collection of intermediate network hubs.
+            connections: Connections linking the network hubs.
         """
         self.drones = drones
         self.start = start
@@ -61,14 +60,13 @@ class NetworkZone():
         return [*self.hubs, self.start, self.end]
 
     def find_connection(self, hub: Hub) -> list[Connection]:
-        """Finds all connections linked directly to a specified hub.
+        """Find connections directly linked to a specified hub.
 
         Args:
-            hub (Hub): The target hub to query for adjacent connections.
+            hub: Hub whose adjacent connections are being queried.
 
         Returns:
-            list[Connection]: A list of connections where the target hub
-                is either the initial or final endpoint.
+            List of connections where the hub is an endpoint.
         """
         connection_filter: list[Connection] = []
         for connection in self.connections:
