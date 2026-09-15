@@ -6,8 +6,6 @@ test suites across preset benchmark maps, and launch an interactive
 terminal menu.
 """
 import sys
-import os
-import shutil
 from hub import TypeConsoleColor as TCC
 from network_zone import NetworkZone
 from parser import Parser
@@ -158,14 +156,13 @@ def run_interactive_menu() -> None:
 
 
 def main() -> None:
-    """Run the drone routing planner from the command line.
+    """Run the drone routing planner via command-line or interactive menu.
 
-    Supports three execution modes: single-map simulation, visual
-    simulation with chunked output, and the interactive map selection menu.
+    Parses the map file from system arguments to compute drone routes,
+    or launches an interactive menu if no file is provided.
 
     Raises:
-        SystemExit: If a simulation is interrupted, fails, or invalid
-            command-line arguments are provided.
+        SystemExit: If the simulation is interrupted or an error occurs.
     """
     if len(sys.argv) == 2:
         try:
@@ -179,43 +176,12 @@ def main() -> None:
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)
             sys.exit(1)
-    elif len(sys.argv) == 3 and '--visual' in sys.argv:
-        try:
-            args: list[str] = sys.argv
-            args.remove('--visual')
-            network_map = Parser(args[1]).parser()
-            planner = RoutePlanner(network_map)
-            chunks_dir = './output/chunks'
-            if os.path.exists(chunks_dir) and os.path.isdir(chunks_dir):
-                shutil.rmtree(chunks_dir)
-            os.makedirs(chunks_dir, exist_ok=True)
-            chunks: int = 0
-            lines: int = 0
-            file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'wt')
-            for index, turn_line in enumerate(planner.drone_routes(True)):
-                if lines == 0:
-                    file.write(
-                        f'# map={args[1]} '
-                        f'chunk={chunks} '
-                        f'start_turn={index}\n'
-                    )
-                print(turn_line)
-                file.write(f"{turn_line}\n")
-                lines += 1
-                if lines == 50:
-                    file.close()
-                    chunks += 1
-                    lines = 0
-                    file = open(f'{chunks_dir}/chunk_{chunks}.txt', 'w')
-            file.close()
-        except KeyboardInterrupt:
-            print('\n[Simulation interrupted by user]', file=sys.stderr)
-            sys.exit(130)
-        except Exception as e:
-            print(f'Error: {e}', file=sys.stderr)
-            sys.exit(1)
     else:
-        run_interactive_menu()
+        try:
+            run_interactive_menu()
+        except KeyboardInterrupt:
+                    print('\n[Simulation interrupted by user]', file=sys.stderr)
+                    sys.exit(130)
 
 
 if __name__ == '__main__':

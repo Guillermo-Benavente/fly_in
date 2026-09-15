@@ -42,28 +42,21 @@ class RoutePlanner():
             List of newly created Drone instances.
         """
         list_drones: list[Drone] = []
-        for id in range(self.network_zone.drones):
+        for id in range(1, 1 + self.network_zone.drones):
             drone: Drone = Drone(id, self.network_zone.start)
             self.network_zone.start.drones_number += 1
             list_drones.append(drone)
         return list_drones
 
-    def drone_routes(
-        self,
-        is_visual: bool = False
-    ) -> Generator[str, None, None]:
+    def drone_routes(self) -> Generator[str, None, None]:
         """Generate drone movements until all drones reach the destination.
 
-        Args:
-            is_visual: Whether to format movements for visual output.
-
         Yields:
-            A space-separated string containing the movements performed during
-            each iteration.
+            str: Space-separated drone movements performed during
+                each iteration.
 
         Raises:
-            RuntimeError: If the maximum number of iterations is exceeded,
-                indicating that one or more drones are stuck in a loop.
+            RuntimeError: If drones exceed maximum iterations and get stuck.
         """
         start_cost: int = (
             self.mapper.nodes[self.network_zone.start.name].remaining_cost
@@ -104,13 +97,10 @@ class RoutePlanner():
                     index, drone, iteration_route
                 )
                 if action and action != drone.previous_zone:
-                    if is_visual:
-                        turn_movements.append(f'D{drone.id}-{action}')
-                    else:
-                        colored_value = self._format_node_color(
-                            action, hubs_by_name.get(action)
-                        )
-                        turn_movements.append(f'D{drone.id}-{colored_value}')
+                    colored_value = self._format_node_color(
+                        action, hubs_by_name.get(action)
+                    )
+                    turn_movements.append(f'D{drone.id}-{colored_value}')
             if turn_movements:
                 yield ' '.join(turn_movements)
             iteration += 1
