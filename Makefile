@@ -16,7 +16,7 @@ install:
 	@echo "Done."
 
 run:
-	@$(PYTHON) fly_in.py $(MAP) $(FLAG)
+	@$(PYTHON) fly_in.py $(MAP)
 
 debug:
 	@$(PYTHON) -m pdb fly_in.py $(MAP)
