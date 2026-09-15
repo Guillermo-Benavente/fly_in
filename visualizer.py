@@ -396,15 +396,6 @@ h1 {{
 
     {hubs_html}
 
-    <div id="startDroneVisual" class="start-drone-visual">
-        <div
-            id="startDroneNode"
-            class="drone"
-            style="background-color: {DRONE_COLORS[0]};
-                   position: relative; left: 0; top: 0;"
-        >D0</div>
-    </div>
-
     <div id="dronesContainer"></div>
 </div>
 
@@ -417,1133 +408,436 @@ const GOAL_HUB = '{goal_hub_name}';
 const CHUNK_SIZE = 50;
 const CHUNKS_DIR = './chunks';
 
+let movements = [];
+let currentChunk = 0;
+let currentTurn = 0;
+let turn = 0;
+let previousMovement = '';
+let boundaryMovement = '';
+let droneAtGoal = null;
+let droneAtStart = 'D0';
+let isPlaying = false;
+let playTimeout = null;
+let navigationQueue = Promise.resolve();
+
 const resetButton = document.getElementById('resetBtn');
 const playButton = document.getElementById('playBtn');
 const previousButton = document.getElementById('prevBtn');
 const nextButton = document.getElementById('nextBtn');
 const turnDisplay = document.getElementById('turnDisplay');
 const dronesContainer = document.getElementById('dronesContainer');
-const startDroneVisual = document.getElementById('startDroneVisual');
 const errorBanner = document.getElementById('errorBanner');
 
-const currentHtmlFileName =
-    window.location.pathname.split('/').pop();
-
-const expectedMapFileName =
-    currentHtmlFileName.replace(/\\.html?$/i, '.txt');
-
-let startDroneNode =
-    document.getElementById('startDroneNode');
-
-let currentTurn = parseInt(
-    localStorage.getItem('flyin_current_turn') || '0',
-    10
-);
-
-const autoResumePlay =
-    localStorage.getItem('flyin_is_playing') === 'true';
-
-let isPlaying = false;
-let playInterval = null;
-let isStepping = false;
-
-const turnLinesCache = new Map();
-
-let droneStatesHistory = [
-    {{ activeDrones: new Map(), startedCount: 0, arrivedCount: 0 }}
-];
-
-
-function showError(message) {{
-    errorBanner.textContent = `⚠️ ${{message}}`;
-    errorBanner.style.display = 'block';
+function queueNextTurn() {{
+    navigationQueue = navigationQueue
+        .then(() => nextTurn())
+        .catch(error => {{
+            errorBanner.textContent = error.message;
+            errorBanner.style.display = 'block';
+        }});
+    return navigationQueue;
 }}
 
-
-function configureDroneNode(droneNode, droneId) {{
-    const numericDroneId = parseInt(droneId, 10);
-
-    droneNode.id = `drone_${{droneId}}`;
-    droneNode.className = 'drone';
-    droneNode.textContent = `D${{droneId}}`;
-    droneNode.style.backgroundColor =
-        DRONE_COLORS[Math.abs(numericDroneId) % DRONE_COLORS.length];
-    droneNode.style.zIndex =
-        String(3 + Math.max(0, numericDroneId));
-
-    return droneNode;
+function queuePreviousTurn() {{
+    navigationQueue = navigationQueue
+        .then(() => previousTurn())
+        .catch(error => {{
+            errorBanner.textContent = error.message;
+            errorBanner.style.display = 'block';
+        }});
+    return navigationQueue;
 }}
 
-
-function createDroneNode(droneId) {{
-    return configureDroneNode(
-        document.createElement('div'),
-        droneId
-    );
+function saveState() {{
+    const drones = Array
+        .from(dronesContainer.querySelectorAll('.drone'))
+        .filter(drone => {{
+        if (drone.dataset.hub === GOAL_HUB && drone.id !== droneAtGoal)
+            return false;
+        if (drone.dataset.hub === START_HUB && drone.id !== droneAtStart)
+            return false;
+        return true;
+    }}).map(drone => ({{
+        name: drone.id,
+        hub: drone.dataset.hub,
+        left: drone.style.left,
+        top: drone.style.top
+    }}));
+    const occupancy = {{}};
+    document.querySelectorAll('.hub-occupancy').forEach(element => {{
+        occupancy[element.id] = element.textContent;
+    }});
+    localStorage.setItem('flyInVisualizerState', JSON.stringify({{
+        isPlaying,
+        turn,
+        drones,
+        droneAtGoal,
+        droneAtStart,
+        previousMovement,
+        occupancy
+    }}));
 }}
 
-
-function moveDroneToPosition(
-    droneNode,
-    targetX,
-    targetY,
-    animate = true
-) {{
-    if (animate) {{
-        void droneNode.offsetWidth;
-        droneNode.classList.add('is-moving');
-    }} else droneNode.classList.remove('is-moving');
-
-    droneNode.style.left = `${{targetX}}px`;
-    droneNode.style.top = `${{targetY}}px`;
+function loadState() {{
+    const savedState = localStorage.getItem('flyInVisualizerState');
+    if (!savedState) return null;
+    try {{
+        return JSON.parse(savedState);
+    }} catch {{
+        return null;
+    }}
 }}
 
-
-function spawnDroneAtPosition(
-    droneId,
-    positionX,
-    positionY
-) {{
-    const droneNode = createDroneNode(droneId);
-    moveDroneToPosition(
-        droneNode,
-        positionX,
-        positionY,
-        false
-    );
-    dronesContainer.appendChild(droneNode);
-    return droneNode;
-}}
-
-
-function createStartDronePlaceholder(droneId) {{
-    const placeholderNode = document.createElement('div');
-
-    placeholderNode.id = 'startDroneNode';
-    placeholderNode.className = 'drone';
-    placeholderNode.textContent = `D${{droneId}}`;
-    placeholderNode.style.position = 'relative';
-    placeholderNode.style.left = '0';
-    placeholderNode.style.top = '0';
-    placeholderNode.style.zIndex = '4';
-    placeholderNode.style.backgroundColor =
-        DRONE_COLORS[
-            Math.abs(parseInt(droneId, 10))
-            % DRONE_COLORS.length
-        ];
-
-    return placeholderNode;
-}}
-
-
-function spawnDroneFromStart(
-    droneId,
-    targetX,
-    targetY
-) {{
-    const startCoordinates = HUB_POSITIONS[START_HUB];
-
-    if (!startCoordinates || !startDroneNode) return null;
-
-    const departingDroneNode =
-        configureDroneNode(startDroneNode, droneId);
-
-    departingDroneNode.style.position = 'absolute';
-    departingDroneNode.style.left =
-        `${{startCoordinates.x}}px`;
-    departingDroneNode.style.top =
-        `${{startCoordinates.y}}px`;
-    departingDroneNode.style.transform =
-        'translate(-50%, -50%)';
-
-    dronesContainer.appendChild(departingDroneNode);
-
-    const nextDroneId =
-        parseInt(droneId, 10) + 1;
-
-    if (nextDroneId < TOTAL_DRONES) {{
-        const nextStartDroneNode =
-            createStartDronePlaceholder(nextDroneId);
-
-        startDroneVisual.appendChild(
-            nextStartDroneNode
-        );
-
-        startDroneNode =
-            nextStartDroneNode;
+function togglePlay() {{
+    isPlaying = !isPlaying;
+    if (isPlaying) {{
+        playButton.textContent = '❚❚ Pause';
+        playButton.classList.add('active');
+        clearTimeout(playTimeout);
+        playTimeout = setTimeout(playNext, 450);
     }} else {{
-        startDroneVisual.style.display =
-            'none';
+        playButton.textContent = '▶ Play';
+        playButton.classList.remove('active');
+        clearTimeout(playTimeout);
+        playTimeout = null;
     }}
-
-    moveDroneToPosition(
-        departingDroneNode,
-        targetX,
-        targetY
-    );
-
-    return departingDroneNode;
+    saveState();
 }}
 
+async function playNext() {{
+    if (!isPlaying) return;
+    await queueNextTurn();
+    if (isPlaying) playTimeout = setTimeout(playNext, 450);
+}}
 
-function moveDroneBackToStart(
-    returningDroneNode,
-    returningDroneId,
-    targetTurn
-) {{
-    const startCoordinates =
-        HUB_POSITIONS[START_HUB];
+function updateOccupancy(hub, change) {{
+    const occupancy = document.getElementById(`occupancy-${{hub}}`);
+    if (!occupancy) return;
+    const current = parseInt(occupancy.textContent.split('/')[0]);
+    occupancy.textContent = `${{current + change}}/1`;
+}}
 
-    if (!startCoordinates || !returningDroneNode) {{
-        return Promise.resolve();
+function createDrone(hub, name) {{
+    const numDron = parseInt(name.replace('D', ''));
+    const newDron = document.createElement('div');
+    newDron.id = name;
+    newDron.textContent = name;
+    newDron.dataset.hub = hub;
+    newDron.style.left = `${{HUB_POSITIONS[hub].x}}px`;
+    newDron.style.top = `${{HUB_POSITIONS[hub].y}}px`;
+    newDron.style.backgroundColor = DRONE_COLORS[numDron % 25];
+    newDron.classList.add('drone');
+    dronesContainer.appendChild(newDron);
+}}
+
+function removeDron(name) {{
+    const drone = document.getElementById(name);
+    if (drone) drone.remove();
+}}
+
+function getPreviousMovement(turnIndex) {{
+    if (turnIndex > 0) return movements[turnIndex - 1];
+    return previousMovement;
+}}
+
+function getPreviousHub(name, turnIndex) {{
+    if (name === 'D0' && turnIndex === 0) return START_HUB;
+    const previousTurn = getPreviousMovement(turnIndex);
+    if (!previousTurn) return START_HUB;
+    const movement = previousTurn
+        .split(' ')
+        .find(movement => movement.startsWith(`${{name}}-`));
+    if (!movement) return START_HUB;
+    if (turnIndex === 0 && !movements.some((turnMovement, index) => {{
+        if (index >= turnIndex)
+            return false;
+        return turnMovement
+            .split(' ')
+            .some(movement => movement.startsWith(`${{name}}-`));
+    }}))
+        return START_HUB;
+    return movement.split('-')[1];
+}}
+
+function getPreviousGoalDrone(turnIndex) {{
+    if (turnIndex > 0) {{
+        for (let i = turnIndex - 1; i >= 0; i--) {{
+            const previousGoalMovement = movements[i]
+                .split(' ')
+                .find(movement => movement.endsWith(`-${{GOAL_HUB}}`));
+            if (previousGoalMovement)
+                return previousGoalMovement.split('-')[0];
+        }}
     }}
 
-    return new Promise(resolve => {{
-        const mapContainer =
-            dronesContainer.parentElement;
+    if (previousMovement) {{
+        const previousGoalMovement = previousMovement
+            .split(' ')
+            .find(movement => movement.endsWith(`-${{GOAL_HUB}}`));
+        if (previousGoalMovement)
+            return previousGoalMovement.split('-')[0];
+    }}
+    return null;
+}}
 
-        let animationFinished = false;
+function prepareStart(drone, numDron, origin, destination, isReverse) {{
+    if (!isReverse && origin === START_HUB) {{
+        const nextDrone = `D${{numDron + 1}}`;
+        createDrone(START_HUB, nextDrone);
+        droneAtStart = nextDrone;
+    }}
+    if (isReverse && destination === START_HUB) {{
+        const oldDrone = droneAtStart;
+        const newDrone = drone;
+        if (oldDrone && oldDrone !== newDrone.id) {{
+            newDrone.addEventListener('transitionend', event => {{
+                if (event.propertyName === 'left')
+                    removeDron(oldDrone);
+            }}, {{ once: true }});
+        }}
+        droneAtStart = newDrone.id;
+    }}
+}}
 
-        returningDroneNode.style.position =
-            'absolute';
+function prepareGoal(name, origin, destination, isReverse, turnIndex) {{
+    if (!isReverse && destination === GOAL_HUB) {{
+        const oldDrone = droneAtGoal;
+        const newDrone = document.getElementById(name);
+        if (oldDrone && newDrone) {{
+            newDrone.addEventListener('transitionend', event => {{
+                if (event.propertyName === 'left')
+                    removeDron(oldDrone);
+            }}, {{ once: true }});
+        }}
+        droneAtGoal = name;
+    }}
+    if (isReverse && origin === GOAL_HUB) {{
+        const previousName = getPreviousGoalDrone(turnIndex);
+        if (previousName && !document.getElementById(previousName))
+            createDrone(GOAL_HUB, previousName);
+        droneAtGoal = previousName || null;
+    }}
+}}
 
-        returningDroneNode.style.zIndex = '10';
-
-        mapContainer.appendChild(
-            returningDroneNode
+function move(turnMovements, isReverse = false, turnIndex = 0) {{
+    turnMovements.split(' ').forEach(movement => {{
+        const [name, movementDestination] = movement.split('-');
+        let drone = document.getElementById(name);
+        let origin;
+        let destination;
+        if (isReverse) {{
+            origin = movementDestination;
+            destination = getPreviousHub(name, turnIndex);
+            if (!drone) createDrone(origin, name);
+            drone = document.getElementById(name);
+        }} else {{
+            origin = drone.dataset.hub;
+            destination = movementDestination;
+        }}
+        prepareStart(
+            drone,
+            parseInt(name.replace('D', '')),
+            origin,
+            destination,
+            isReverse
         );
-
-        const handleReturnAnimationEnd = event => {{
-            if (
-                animationFinished ||
-                event.propertyName !== 'left'
-            ) return;
-
-            animationFinished = true;
-
-            returningDroneNode.removeEventListener(
-                'transitionend',
-                handleReturnAnimationEnd
-            );
-
-            if (currentTurn !== targetTurn) {{
-                resolve();
-                return;
-            }}
-
-            startDroneNode?.remove();
-
-            returningDroneNode.id =
-                'startDroneNode';
-
-            returningDroneNode.className =
-                'drone';
-
-            returningDroneNode.style.position =
-                'relative';
-
-            returningDroneNode.style.left = '0';
-            returningDroneNode.style.top = '0';
-
-            returningDroneNode.style.transform =
-                'translate(-50%, -50%)';
-
-            returningDroneNode.style.zIndex = '4';
-
-            returningDroneNode.style.backgroundColor =
-                DRONE_COLORS[
-                    Math.abs(
-                        parseInt(
-                            returningDroneId,
-                            10
-                        )
-                    ) % DRONE_COLORS.length
-                ];
-
-            returningDroneNode.classList.remove(
-                'is-moving'
-            );
-
-            returningDroneNode.textContent =
-                `D${{returningDroneId}}`;
-
-            startDroneVisual.appendChild(
-                returningDroneNode
-            );
-
-            startDroneNode =
-                returningDroneNode;
-
-            startDroneVisual.style.display =
-                'block';
-
-            resolve();
-        }};
-
-        returningDroneNode.addEventListener(
-            'transitionend',
-            handleReturnAnimationEnd
+        prepareGoal(
+            name,
+            origin,
+            destination,
+            isReverse,
+            turnIndex
         );
-
-        void returningDroneNode.offsetWidth;
-
-        returningDroneNode.classList.add(
-            'is-moving'
-        );
-
-        returningDroneNode.style.left =
-            `${{startCoordinates.x}}px`;
-
-        returningDroneNode.style.top =
-            `${{startCoordinates.y}}px`;
+        updateOccupancy(origin, -1);
+        updateOccupancy(destination, 1);
+        drone.classList.add('is-moving');
+        drone.style.left = `${{HUB_POSITIONS[destination].x}}px`;
+        drone.style.top = `${{HUB_POSITIONS[destination].y}}px`;
+        drone.dataset.hub = destination;
     }});
 }}
 
-
-function resetStartDroneVisual() {{
-    startDroneVisual.innerHTML = '';
-
-    if (TOTAL_DRONES <= 0) {{
-        startDroneVisual.style.display = 'none';
-        startDroneNode = null;
-        return;
-    }}
-
-    startDroneNode =
-        createStartDronePlaceholder(0);
-
-    startDroneVisual.appendChild(
-        startDroneNode
-    );
-
-    startDroneVisual.style.display =
-        'block';
+async function getLastMovement(chunk) {{
+    if (chunk < 0)
+        return '';
+    const response = await fetch(`${{CHUNKS_DIR}}/chunk_${{chunk}}.txt`);
+    if (!response.ok)
+        return '';
+    const text = await response.text();
+    return text
+        .split('\\n')
+        .map(line => line.trim())
+        .filter(line => line !== '')
+        .at(-1);
 }}
 
-
-function resetStateToZero() {{
-    dronesContainer.innerHTML = '';
-
-    droneStatesHistory = [
-        {{ activeDrones: new Map(), startedCount: 0, arrivedCount: 0 }}
-    ];
-
+async function loadChunk(chunk) {{
+    const response = await fetch(`${{CHUNKS_DIR}}/chunk_${{chunk}}.txt`);
+    if (!response.ok)
+        throw new Error(`No se pudo leer el chunk ${{chunk}}`);
+    const text = await response.text();
+    const lines = text.split('\\n');
+    const header = lines[0].trim();
+    const mapMatch = header.match(/map=([^\\s]+)/);
+    if (!mapMatch)
+        throw new Error('La cabecera del chunk no contiene el mapa');
+    const mapPath = mapMatch[1];
+    const mapFile = mapPath.split('/').pop();
+    const currentFile = window.location.pathname
+        .split('/')
+        .pop()
+        .replace(/\\.[^/.]+$/, '');
+    if (mapFile.replace(/\\.[^/.]+$/, '') !== currentFile)
+        throw new Error(`Estos ficheros no son para el mapa ${{currentFile}}`);
+    movements = lines
+        .slice(1)
+        .map(line => line.trim())
+        .filter(line => line !== '');
+    currentChunk = chunk;
     currentTurn = 0;
-
-    localStorage.setItem(
-        'flyin_current_turn',
-        '0'
-    );
-
-    resetStartDroneVisual();
 }}
 
-
-async function loadChunkForTurn(turnNumber) {{
-    const chunkIndex =
-        Math.floor((turnNumber - 1) / CHUNK_SIZE);
-
-    const chunkFileName =
-        `chunk_${{chunkIndex}}.txt`;
-
-    try {{
-        const response = await fetch(
-            `${{CHUNKS_DIR}}/${{chunkFileName}}`
-        );
-
-        if (!response.ok) {{
-            showError(
-                `No se ha podido cargar ${{chunkFileName}}`
-            );
+async function nextTurn() {{
+    if (currentTurn >= movements.length) {{
+        try {{
+            previousMovement = movements[movements.length - 1];
+            await loadChunk(currentChunk + 1);
+        }} catch (error) {{
             return false;
         }}
-
-        const chunkText = await response.text();
-        const chunkLines = chunkText
-            .split('\\n')
-            .map(line => line.trim())
-            .filter(Boolean);
-
-        if (!chunkLines.length) {{
-            showError(
-                `${{chunkFileName}} está vacío`
-            );
-            return false;
-        }}
-
-        const headerLine = chunkLines[0];
-        const headerMatch = headerLine.match(
-            /^#\\s*map=(\\S+)\\s+chunk=(\\d+)\\s+start_turn=(\\d+)$/
-        );
-
-        if (!headerMatch) {{
-            showError(
-                `${{chunkFileName}} no tiene una cabecera válida`
-            );
-            return false;
-        }}
-
-        const chunkMapPath = headerMatch[1];
-        const declaredChunkIndex =
-            parseInt(headerMatch[2], 10);
-
-        const chunkMapFileName =
-            chunkMapPath.split('/').pop();
-
-        if (chunkMapFileName !== expectedMapFileName) {{
-            showError(
-                `El chunk ${{chunkFileName}} pertenece a ` +
-                `"${{chunkMapFileName}}" y no a ` +
-                `"${{expectedMapFileName}}"`
-            );
-            return false;
-        }}
-
-        if (declaredChunkIndex !== chunkIndex) {{
-            showError(
-                `El archivo ${{chunkFileName}} declara ` +
-                `chunk=${{declaredChunkIndex}}`
-            );
-            return false;
-        }}
-
-        /*
-         * La línea 0 es la cabecera.
-         * Solo las líneas restantes son turnos.
-         */
-        chunkLines.slice(1).forEach((turnLine, lineIndex) => {{
-            const absoluteTurn =
-                chunkIndex * CHUNK_SIZE + lineIndex + 1;
-
-            turnLinesCache.set(
-                absoluteTurn,
-                turnLine
-            );
-        }});
-
-        errorBanner.style.display = 'none';
-
-        return turnLinesCache.has(turnNumber);
-    }} catch (error) {{
-        showError(
-            `Error leyendo ${{chunkFileName}}: ${{error.message}}`
-        );
-        return false;
     }}
-}}
-
-
-function getCoordinates(locationName) {{
-    if (!locationName) return null;
-
-    const directPosition =
-        HUB_POSITIONS[locationName];
-
-    if (directPosition) return directPosition;
-
-    const [initialHubName, finalHubName] =
-        locationName.split('-');
-
-    const initialHubPosition =
-        HUB_POSITIONS[initialHubName];
-
-    const finalHubPosition =
-        HUB_POSITIONS[finalHubName];
-
-    if (
-        !initialHubPosition ||
-        !finalHubPosition
-    ) {{
-        return null;
-    }}
-
-    return {{
-        x: Math.floor(
-            (initialHubPosition.x +
-                finalHubPosition.x) / 2
-        ),
-        y: Math.floor(
-            (initialHubPosition.y +
-                finalHubPosition.y) / 2
-        )
-    }};
-}}
-
-
-async function processUpToTurn(targetTurn) {{
-    while (droneStatesHistory.length <= targetTurn) {{
-        const turnNumber =
-            droneStatesHistory.length;
-
-        if (!turnLinesCache.has(turnNumber)) {{
-            if (!await loadChunkForTurn(turnNumber)) {{
-                return false;
-            }}
-        }}
-
-        const turnLine =
-            turnLinesCache.get(turnNumber);
-
-        const previousState =
-            droneStatesHistory[turnNumber - 1];
-
-        const activeDrones =
-            new Map(previousState.activeDrones);
-
-        let startedDroneCount =
-            previousState.startedCount;
-
-        let arrivedDroneCount =
-            previousState.arrivedCount;
-
-        if (turnLine) {{
-            for (
-                const movementToken
-                of turnLine.split(/\\s+/)
-            ) {{
-                if (!movementToken.startsWith('D')) continue;
-
-                const separatorIndex =
-                    movementToken.indexOf('-');
-
-                if (separatorIndex === -1) continue;
-
-                const droneId =
-                    movementToken.substring(
-                        1,
-                        separatorIndex
-                    );
-
-                const targetLocation =
-                    movementToken.substring(
-                        separatorIndex + 1
-                    );
-
-                const numericDroneId =
-                    parseInt(droneId, 10);
-
-                if (
-                    !previousState.activeDrones.has(droneId) &&
-                    numericDroneId >= previousState.startedCount
-                ) {{
-                    startedDroneCount = Math.max(
-                        startedDroneCount,
-                        numericDroneId + 1
-                    );
-                }}
-
-                const previousLocation =
-                    previousState.activeDrones.get(
-                        droneId
-                    );
-
-                if (
-                    targetLocation === GOAL_HUB &&
-                    previousLocation !== GOAL_HUB
-                ) {{
-                    arrivedDroneCount++;
-                }}
-
-                activeDrones.set(
-                    droneId,
-                    targetLocation
-                );
-            }}
-        }}
-
-        droneStatesHistory.push({{
-            activeDrones,
-            startedCount: startedDroneCount,
-            arrivedCount: arrivedDroneCount,
-        }});
-    }}
-
+    const movement = movements[currentTurn];
+    move(movement, false, currentTurn);
+    if (currentTurn > 0)
+        previousMovement = movement;
+    currentTurn++;
+    turn++;
+    turnDisplay.textContent = `Turn ${{turn}}`;
+    saveState();
     return true;
 }}
 
-
-function updateStartDroneVisual(
-    turnState,
-    movingBackward = false
-) {{
-    const remainingDrones = Math.max(
-        0,
-        TOTAL_DRONES - turnState.startedCount
-    );
-
-    if (movingBackward) {{
-        if (remainingDrones <= 0) {{
-            startDroneVisual.style.display =
-                'none';
-        }}
-        return;
+async function previousTurn() {{
+    if (currentTurn <= 0) {{
+        if (currentChunk <= 0)
+            return false;
+        const movement = movements[0];
+        await loadChunk(currentChunk - 1);
+        previousMovement = movements[movements.length - 1];
+        currentTurn = movements.length - 1;
+        move(movement, true, 0);
+        turn--;
+        turnDisplay.textContent = `Turn ${{turn}}`;
+        saveState();
+        return true;
     }}
-
-    if (
-        remainingDrones <= 0 ||
-        !startDroneNode
-    ) {{
-        startDroneVisual.style.display =
-            'none';
-        return;
-    }}
-
-    const nextDroneId =
-        String(turnState.startedCount);
-
-    startDroneVisual.style.display =
-        'block';
-
-    startDroneNode.textContent =
-        `D${{nextDroneId}}`;
-
-    startDroneNode.style.backgroundColor =
-        DRONE_COLORS[
-            Math.abs(
-                parseInt(nextDroneId, 10)
-            ) % DRONE_COLORS.length
-        ];
+    currentTurn--;
+    const movement = movements[currentTurn];
+    move(movement, true, currentTurn);
+    if (currentTurn > 0)
+        previousMovement = movements[currentTurn - 1];
+    turn--;
+    turnDisplay.textContent = `Turn ${{turn}}`;
+    saveState();
+    return true;
 }}
 
-
-async function renderDrones(
-    turnState,
-    previousState,
-    movingBackward
-) {{
-    const activeDrones =
-        turnState.activeDrones;
-
-    let returningDroneId = null;
-
-    if (
-        movingBackward &&
-        previousState.startedCount >
-            turnState.startedCount
-    ) {{
-        returningDroneId =
-            String(
-                previousState.startedCount - 1
-            );
-    }}
-
-    const dronesAtGoal = [...activeDrones]
-        .filter(
-            ([, location]) =>
-                location === GOAL_HUB
-        )
-        .map(
-            ([droneId]) =>
-                String(droneId)
-        )
-        .sort(
-            (firstId, secondId) =>
-                parseInt(firstId, 10) -
-                parseInt(secondId, 10)
-        );
-
-    const newestGoalDroneId =
-        dronesAtGoal.at(-1) ?? null;
-
-    const previousDronesAtGoal =
-        [...previousState.activeDrones]
-            .filter(
-                ([, location]) =>
-                    location === GOAL_HUB
-            )
-            .map(
-                ([droneId]) =>
-                    String(droneId)
-            )
-            .sort(
-                (firstId, secondId) =>
-                    parseInt(firstId, 10) -
-                    parseInt(secondId, 10)
-            );
-
-    const previousNewestGoalDroneId =
-        previousDronesAtGoal.at(-1) ?? null;
-
-    const newDroneReachedGoal =
-        !movingBackward &&
-        newestGoalDroneId !== null &&
-        previousState.activeDrones.get(
-            newestGoalDroneId
-        ) !== GOAL_HUB;
-
-    for (
-        const [droneId, locationName]
-        of activeDrones
-    ) {{
-        const droneIdString =
-            String(droneId);
-
-        if (
-            movingBackward &&
-            droneIdString === returningDroneId
-        ) {{
-            continue;
-        }}
-
-        const targetCoordinates =
-            getCoordinates(locationName);
-
-        if (!targetCoordinates) continue;
-
-        const keepPreviousGoalDrone =
-            newDroneReachedGoal &&
-            droneIdString === previousNewestGoalDroneId;
-
-        if (
-            locationName === GOAL_HUB &&
-            droneIdString !== newestGoalDroneId &&
-            !keepPreviousGoalDrone
-        ) {{
-            continue;
-        }}
-
-        let droneNode =
-            document.getElementById(
-                `drone_${{droneIdString}}`
-            );
-
-        if (!droneNode) {{
-            if (movingBackward) {{
-                const previousLocation =
-                    previousState.activeDrones.get(
-                        droneIdString
-                    );
-
-                const previousCoordinates =
-                    getCoordinates(previousLocation);
-
-                if (previousCoordinates) {{
-                    droneNode =
-                        spawnDroneAtPosition(
-                            droneIdString,
-                            previousCoordinates.x,
-                            previousCoordinates.y
-                        );
-                }}
-            }} else if (
-                !previousState.activeDrones.has(
-                    droneIdString
-                )
-            ) {{
-                droneNode =
-                    spawnDroneFromStart(
-                        droneIdString,
-                        targetCoordinates.x,
-                        targetCoordinates.y
-                    );
-            }} else {{
-                const previousLocation =
-                    previousState.activeDrones.get(
-                        droneIdString
-                    );
-
-                const previousCoordinates =
-                    getCoordinates(previousLocation) ||
-                    targetCoordinates;
-
-                droneNode =
-                    spawnDroneAtPosition(
-                        droneIdString,
-                        previousCoordinates.x,
-                        previousCoordinates.y
-                    );
-            }}
-        }}
-
-        if (!droneNode) continue;
-
-        if (
-            previousState.activeDrones.has(
-                droneIdString
-            )
-        ) {{
-            moveDroneToPosition(
-                droneNode,
-                targetCoordinates.x,
-                targetCoordinates.y
-            );
-        }}
-    }}
-
-    if (
-        newDroneReachedGoal &&
-        previousNewestGoalDroneId !== null
-    ) {{
-        const arrivingDroneNode =
-            document.getElementById(
-                `drone_${{newestGoalDroneId}}`
-            );
-
-        const previousGoalDroneNode =
-            document.getElementById(
-                `drone_${{previousNewestGoalDroneId}}`
-            );
-
-        if (
-            arrivingDroneNode &&
-            previousGoalDroneNode
-        ) {{
-            const handleGoalArrival = event => {{
-                if (event.propertyName !== 'left') return;
-
-                arrivingDroneNode.removeEventListener(
-                    'transitionend',
-                    handleGoalArrival
-                );
-
-                previousGoalDroneNode.remove();
-            }};
-
-            arrivingDroneNode.addEventListener(
-                'transitionend',
-                handleGoalArrival
-            );
-        }}
-    }}
-
-    if (returningDroneId !== null) {{
-        const returningDroneNode =
-            document.getElementById(
-                `drone_${{returningDroneId}}`
-            );
-
-        if (returningDroneNode) {{
-            await moveDroneBackToStart(
-                returningDroneNode,
-                returningDroneId,
-                currentTurn
-            );
-        }}
-    }}
-
-    for (
-        const droneNode
-        of document.querySelectorAll(
-            '#dronesContainer .drone'
-        )
-    ) {{
-        const droneId =
-            droneNode.id.replace(
-                'drone_',
-                ''
-            );
-
-        if (!activeDrones.has(droneId)) {{
-            droneNode.remove();
-        }}
-    }}
-}}
-
-
-function updateHubOccupancy(turnState) {{
-    const hubOccupancy = {{}};
-
-    for (
-        const [, locationName]
-        of turnState.activeDrones
-    ) {{
-        if (
-            locationName !== GOAL_HUB &&
-            !locationName.includes('-')
-        ) {{
-            hubOccupancy[locationName] =
-                (hubOccupancy[locationName] || 0) + 1;
-        }}
-    }}
-
-    const remainingDrones =
-        TOTAL_DRONES -
-        turnState.startedCount;
-
-    hubOccupancy[START_HUB] =
-        (hubOccupancy[START_HUB] || 0) +
-        remainingDrones;
-
-    hubOccupancy[GOAL_HUB] =
-        turnState.arrivedCount;
-
+resetButton.addEventListener('click', () => {{
+    clearTimeout(playTimeout);
+    dronesContainer.replaceChildren();
+    currentChunk = 0;
+    currentTurn = 0;
+    turn = 0;
+    previousMovement = '';
+    boundaryMovement = '';
+    droneAtGoal = null;
+    droneAtStart = 'D0';
+    isPlaying = false;
+    playTimeout = null;
+    navigationQueue = Promise.resolve();
     document
         .querySelectorAll('.hub-occupancy')
-        .forEach(occupancyElement => {{
-            const hubName =
-                occupancyElement.id.replace(
-                    'occupancy-',
-                    ''
-                );
-
-            const maximumDrones =
-                occupancyElement
-                    .parentElement
-                    .dataset
-                    .max;
-
-            occupancyElement.textContent =
-                `${{
-                    hubOccupancy[hubName] || 0
-                }}/${{maximumDrones}}`;
+        .forEach(element => {{
+            element.textContent = '0/1';
         }});
-}}
-
-
-async function renderTurn(
-    targetTurn,
-    forceReset = false
-) {{
-    const previousTurn = currentTurn;
-    const movingBackward =
-        targetTurn < previousTurn;
-
-    if (targetTurn === 0 && forceReset) {{
-        resetStateToZero();
-
-        turnDisplay.textContent =
-            'Turn 0';
-
-        updateHubOccupancy(
-            droneStatesHistory[0]
-        );
-
-        updateButtons();
-
-        return true;
-    }}
-
-    if (targetTurn === 0) {{
-        const previousState =
-            droneStatesHistory[previousTurn];
-
-        const targetState =
-            droneStatesHistory[0];
-
-        currentTurn = 0;
-
-        localStorage.setItem(
-            'flyin_current_turn',
-            '0'
-        );
-
-        turnDisplay.textContent =
-            'Turn 0';
-
-        updateStartDroneVisual(
-            targetState,
-            true
-        );
-
-        await renderDrones(
-            targetState,
-            previousState,
-            true
-        );
-
-        updateHubOccupancy(
-            targetState
-        );
-
-        updateButtons();
-
-        return true;
-    }}
-
-    if (!await processUpToTurn(targetTurn)) {{
-        return false;
-    }}
-
-    const previousState =
-        droneStatesHistory[previousTurn];
-
-    const targetState =
-        droneStatesHistory[targetTurn];
-
-    currentTurn =
-        targetTurn;
-
-    localStorage.setItem(
-        'flyin_current_turn',
-        String(targetTurn)
-    );
-
-    turnDisplay.textContent =
-        `Turn ${{targetTurn}}`;
-
-    updateStartDroneVisual(
-        targetState,
-        movingBackward
-    );
-
-    await renderDrones(
-        targetState,
-        previousState,
-        movingBackward
-    );
-
-    updateHubOccupancy(
-        targetState
-    );
-
-    updateButtons();
-
-    return true;
-}}
-
-
-function updateButtons() {{
-    previousButton.disabled =
-        isStepping ||
-        currentTurn <= 0;
-
-    nextButton.disabled =
-        isStepping;
-}}
-
-
-async function stepNext() {{
-    if (isStepping) return;
-
-    isStepping = true;
-
-    try {{
-        const nextTurn =
-            currentTurn + 1;
-
-        if (!await processUpToTurn(nextTurn)) {{
-            if (isPlaying) togglePlay();
-            return;
-        }}
-
-        await renderTurn(nextTurn);
-    }} finally {{
-        isStepping = false;
-        updateButtons();
-    }}
-}}
-
-
-async function stepPrevious() {{
-    if (isStepping || currentTurn <= 0) return;
-
-    isStepping = true;
-
-    try {{
-        await renderTurn(
-            currentTurn - 1
-        );
-    }} finally {{
-        isStepping = false;
-        updateButtons();
-    }}
-}}
-
-
-function togglePlay() {{
-    if (isPlaying) {{
-        isPlaying = false;
-
-        localStorage.setItem(
-            'flyin_is_playing',
-            'false'
-        );
-
-        playButton.textContent =
-            '▶ Play';
-
-        playButton.classList.remove(
-            'active'
-        );
-
-        if (playInterval) {{
-            clearInterval(playInterval);
-            playInterval = null;
-        }}
-
-        return;
-    }}
-
-    isPlaying = true;
-
-    localStorage.setItem(
-        'flyin_is_playing',
-        'true'
-    );
-
-    playButton.textContent =
-        '❚❚ Pause';
-
-    playButton.classList.add(
-        'active'
-    );
-
-    playInterval = setInterval(
-        () => stepNext(),
-        600
-    );
-}}
-
-
-resetButton.addEventListener(
-    'click',
-    async () => {{
-        if (isPlaying) togglePlay();
-        await renderTurn(0, true);
-    }}
-);
-
-playButton.addEventListener(
-    'click',
-    togglePlay
-);
-
-nextButton.addEventListener(
-    'click',
-    () => {{
-        if (!isPlaying) stepNext();
-    }}
-);
-
-previousButton.addEventListener(
-    'click',
-    () => {{
-        if (!isPlaying) stepPrevious();
-    }}
-);
-
-document.addEventListener(
-    'keydown',
-    event => {{
-        if (
-            event.key === 'ArrowRight' &&
-            !isPlaying
-        ) {{
-            stepNext();
-        }}
-
-        if (
-            event.key === 'ArrowLeft' &&
-            !isPlaying
-        ) {{
-            stepPrevious();
-        }}
-
-        if (event.key === ' ') {{
-            event.preventDefault();
-            togglePlay();
-        }}
-    }}
-);
-
-
-(async () => {{
-    await renderTurn(currentTurn);
-
-    if (autoResumePlay) {{
+    document
+        .getElementById(`occupancy-${{START_HUB}}`)
+        .textContent = `${{TOTAL_DRONES}}/1`;
+    document
+        .getElementById(`occupancy-${{GOAL_HUB}}`)
+        .textContent = '0/1';
+    playButton.textContent = '▶ Play';
+    playButton.classList.remove('active');
+    createDrone(START_HUB, droneAtStart);
+    turnDisplay.textContent = 'Turn 0';
+    saveState();
+}});
+
+nextButton.addEventListener('click', queueNextTurn);
+previousButton.addEventListener('click', queuePreviousTurn);
+playButton.addEventListener('click', togglePlay);
+
+document.addEventListener('keydown', event => {{
+    if (event.repeat) return;
+    if (event.key === 'ArrowRight') nextTurn();
+    if (event.key === 'ArrowLeft') previousTurn();
+    if (event.key === ' ') {{
+        event.preventDefault();
         togglePlay();
     }}
-}})();
+}});
+
+document.addEventListener('DOMContentLoaded', async () => {{
+    try {{
+        const savedState = loadState();
+        if (!savedState) {{
+            await loadChunk(0);
+            createDrone(START_HUB, droneAtStart);
+            document
+                .getElementById(`occupancy-${{START_HUB}}`)
+                .textContent = `${{TOTAL_DRONES}}/1`;
+            document
+                .getElementById(`occupancy-${{GOAL_HUB}}`)
+                .textContent = '0/1';
+            return;
+        }}
+        turn = savedState.turn || 0;
+        currentChunk = Math.floor(turn / CHUNK_SIZE);
+        await loadChunk(currentChunk);
+        currentTurn = turn % CHUNK_SIZE;
+        previousMovement = savedState.previousMovement || '';
+        droneAtGoal = savedState.droneAtGoal || null;
+        droneAtStart = savedState.droneAtStart || 'D0';
+        dronesContainer.replaceChildren();
+        if (savedState.drones && savedState.drones.length) {{
+            savedState.drones.forEach(drone => {{
+                createDrone(drone.hub, drone.name);
+                const element = document.getElementById(drone.name);
+                if (element) {{
+                    element.style.left = drone.left;
+                    element.style.top = drone.top;
+                }}
+            }});
+        }} else createDrone(START_HUB, droneAtStart);
+        if (savedState.occupancy) {{
+            Object.entries(savedState.occupancy).forEach(([id, value]) => {{
+                const element = document.getElementById(id);
+                if (element)
+                    element.textContent = value;
+            }});
+        }}
+        turnDisplay.textContent = `Turn ${{turn}}`;
+        isPlaying = !!savedState.isPlaying;
+        if (isPlaying) {{
+            playButton.textContent = '❚❚ Pause';
+            playButton.classList.add('active');
+            playTimeout = setTimeout(playNext, 450);
+        }}
+    }} catch (error) {{
+        errorBanner.textContent = error.message;
+        errorBanner.style.display = 'block';
+    }}
+}});
 </script>
 </body>
 </html>'''
