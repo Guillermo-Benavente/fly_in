@@ -105,45 +105,6 @@ A safety limit is also used to detect situations where drones become stuck in an
 
 ---
 
-## Visual Representation
-
-The project includes an interactive visualizer implemented in `visualizer.py`.
-
-The visualizer converts the textual simulation output into a self-contained HTML page containing the network topology and drone movements.
-
-### Automatic Mode
-
-The complete simulation can be played automatically.
-
-Drone movements are animated continuously so that the complete route can be observed without manually advancing each turn.
-
-### Manual Mode
-
-The visualization also supports turn-by-turn inspection.
-
-Users can move backwards and forwards through the simulation using the interface controls or the keyboard arrow keys:
-
-* `←` previous turn
-* `→` next turn
-
-This makes it possible to inspect the exact state of the network at each step.
-
-### Visual Feedback
-
-The visualization provides additional information that is difficult to interpret from console output alone:
-
-* colour-coded hubs;
-* visual distinction between start and destination hubs;
-* visual distinction between zone types;
-* current hub occupancy;
-* maximum hub capacity;
-* connection capacity;
-* animated drone movements.
-
-The visualizer is particularly useful for debugging route decisions, identifying congestion, and understanding how capacity constraints affect the simulation.
-
----
-
 ## Project Structure
 
 ```text
@@ -155,7 +116,6 @@ The visualizer is particularly useful for debugging route decisions, identifying
 ├── network_zone.py     # Network topology container
 ├── parser.py           # Input map parser and validation
 ├── route_planner.py    # Drone routing and simulation
-├── visualizer.py       # Interactive HTML visualization
 ├── fly_in.py           # Main CLI entry point
 └── Makefile            # Build and execution commands
 ```
@@ -187,16 +147,6 @@ make run MAP=maps/easy/01_linear_path.txt
 ```
 
 The program outputs the movements turn by turn.
-
-### Generate the Visualization
-
-To generate the interactive HTML visualization:
-
-```bash
-make visual MAP=maps/easy/01_linear_path.txt
-```
-
-The generated HTML file can then be opened in a web browser.
 
 ### Cleanup
 
@@ -304,7 +254,6 @@ The output therefore provides a compact representation of the complete simulatio
 ### Traditional References
 
 * **Graph traversal and shortest-path algorithms:** Breadth-first search and graph traversal concepts were used as references when designing the network cost calculation.
-* **MDN Web Docs — CSS Animations:** Used as a reference for CSS animations and `@keyframes` used by the visualizer.
 
 ### AI Usage
 
