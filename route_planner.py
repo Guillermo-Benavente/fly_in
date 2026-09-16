@@ -7,6 +7,7 @@ capacity limits, and turn outputs.
 from typing import Generator
 from network_zone import NetworkZone
 from hub import TypeZone, TypeMetadata as TMHub, TypeConsoleColor, Hub
+from connection import Connection
 from drone import Drone
 from mapper import Mapper, MapNode
 
@@ -96,7 +97,7 @@ class RoutePlanner():
                 action: str | None = self._move_drone(
                     index, drone, iteration_route
                 )
-                if action and action != drone.previous_zone:
+                if action and action != drone.previous_zone.name:
                     colored_value = self._format_node_color(
                         action, hubs_by_name.get(action)
                     )
@@ -143,32 +144,36 @@ class RoutePlanner():
             action_name: str
             if is_restricted:
                 drone.in_transit = True
-                action_name = self._get_connection_name(
-                    drone.current_zone.name, next_node.hub.name
-                )
+                action_name = self._get_connection(
+                    drone.current_zone, next_node.hub
+                ).name
             else:
                 action_name = next_node.hub.name
-            drone.previous_zone = drone.current_zone.name
+            drone.previous_zone = drone.current_zone
             drone.current_zone = next_node.hub
             return action_name
 
-    def _get_connection_name(self, hub_a: str, hub_b: str) -> str:
-        """Get the explicit connection name between two hubs.
+    def _get_connection(self, hub_a: Hub, hub_b: Hub) -> Connection:
+        """Get the connection between two neighboring hubs.
 
         Args:
-            hub_a: Name of the first hub.
-            hub_b: Name of the second hub.
+            hub_a: First hub.
+            hub_b: Second hub.
 
         Returns:
-            The custom connection name if defined, otherwise the canonical
-            connection key.
+            The connection shared by both hubs.
+
+        Raises:
+            ValueError: If no connection exists between the given hubs.
         """
-        for conn in self.network_zone.connections:
-            if conn.init_hub.name == hub_a and conn.final_hub.name == hub_b:
-                return conn.name
-            if conn.init_hub.name == hub_b and conn.final_hub.name == hub_a:
-                return conn.name
-        return Mapper.connection_key(hub_a, hub_b)
+        conn_a: list[Connection] = self.network_zone.find_connection(hub_a)
+        conn_b: list[Connection] = self.network_zone.find_connection(hub_b)
+        for conn in conn_a:
+            if conn in conn_b:
+                return conn
+        raise ValueError(
+            f"No connection found between {hub_a.name} and {hub_b.name}"
+        )
 
     def _search_next_node(
         self,

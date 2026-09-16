@@ -68,8 +68,9 @@ class NetworkZone():
         Returns:
             List of connections where the hub is an endpoint.
         """
-        connection_filter: list[Connection] = []
-        for connection in self.connections:
-            if connection.init_hub == hub or connection.final_hub == hub:
-                connection_filter.append(connection)
-        return connection_filter
+        return [
+            connection
+            for connection
+            in self.connections
+            if connection.init_hub == hub or connection.final_hub == hub
+        ]

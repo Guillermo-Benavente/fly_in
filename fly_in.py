@@ -180,8 +180,8 @@ def main() -> None:
         try:
             run_interactive_menu()
         except KeyboardInterrupt:
-                    print('\n[Simulation interrupted by user]', file=sys.stderr)
-                    sys.exit(130)
+            print('\n[Simulation interrupted by user]', file=sys.stderr)
+            sys.exit(130)
 
 
 if __name__ == '__main__':

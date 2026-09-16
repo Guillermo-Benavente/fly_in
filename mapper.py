@@ -61,11 +61,10 @@ class Mapper:
         Args:
             network_zone: Network topology containing hubs and connections.
         """
-        self.nodes = {}
+        self.nodes = {
+            hub.name: MapNode(hub) for hub in network_zone.all_hubs()
+        }
         self.connection_capacity = {}
-        all_hubs: list[Hub] = network_zone.all_hubs()
-        for hub in all_hubs:
-            self.nodes[hub.name] = MapNode(hub)
         for connection in network_zone.connections:
             init_hub_name: str = connection.init_hub.name
             final_hub_name: str = connection.final_hub.name
